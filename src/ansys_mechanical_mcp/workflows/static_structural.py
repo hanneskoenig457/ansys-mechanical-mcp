@@ -1,0 +1,2 @@
+"""Static Structural workflow contracts."""
+

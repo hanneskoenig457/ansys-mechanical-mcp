@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ansys-mechanical-mcp"
+version = "0.1.0a1"
+description = "Unofficial MCP server for practical Ansys Mechanical automation using PyMechanical and PyDPF."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "ansys-mechanical-mcp contributors" }
+]
+keywords = [
+  "ansys",
+  "mechanical",
+  "fem",
+  "fea",
+  "mcp",
+  "model-context-protocol",
+  "pyansys",
+  "pymechanical",
+  "pydpf",
+  "static-structural",
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
+dependencies = [
+  "mcp>=1.0",
+]
+
+[project.optional-dependencies]
+ansys = [
+  "ansys-mechanical-core",
+  "ansys-dpf-core",
+]
+dev = [
+  "pytest>=8",
+  "ruff>=0.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/hanneskoenig457/ansys-mechanical-mcp"
+Repository = "https://github.com/hanneskoenig457/ansys-mechanical-mcp"
+Issues = "https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues"
+Documentation = "https://github.com/hanneskoenig457/ansys-mechanical-mcp#readme"
+
+[project.scripts]
+ansys-mechanical-mcp = "ansys_mechanical_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ansys_mechanical_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

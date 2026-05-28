@@ -1,0 +1,2 @@
+"""Ansys Mechanical adapter."""
+
