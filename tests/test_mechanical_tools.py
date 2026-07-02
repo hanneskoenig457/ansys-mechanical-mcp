@@ -1,18 +1,27 @@
 from pathlib import Path
 
-from ansys_mechanical_mcp.products.mechanical.tools import execute_mechanical_script
+from ansys_mechanical_mcp.products.mechanical.tools import (
+    execute_mechanical_script,
+    inspect_mechanical_model,
+)
 
 
 class FakeMechanicalSession:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+        inline_result: str = "inline-result",
+    ) -> None:
         self.calls = []
         self.fail = fail
+        self.inline_result = inline_result
 
     def run_python_script(self, script, **kwargs):
         self.calls.append(("run_python_script", script, kwargs))
         if self.fail:
             raise RuntimeError("license unavailable")
-        return "inline-result"
+        return self.inline_result
 
     def run_python_script_from_file(self, file_path, **kwargs):
         self.calls.append(("run_python_script_from_file", file_path, kwargs))
@@ -177,3 +186,103 @@ def test_execute_mechanical_script_result_is_json_compatible() -> None:
         },
         "error": None,
     }
+
+
+def test_inspect_mechanical_model_runs_data_model_script() -> None:
+    session = FakeMechanicalSession(
+        inline_result=(
+            '{"product_version": "2025 R2", "analyses": ['
+            '{"name": "Static Structural", "object_id": 17, '
+            '"type": "StaticStructural", "category": "Analysis"}'
+            "]}"
+        )
+    )
+
+    result = inspect_mechanical_model(session)
+
+    assert result.success is True
+    assert result.error is None
+    assert result.message == "Mechanical model inspected successfully."
+    assert result.data == {
+        "product_version": "2025 R2",
+        "analyses": [
+            {
+                "name": "Static Structural",
+                "object_id": 17,
+                "type": "StaticStructural",
+                "category": "Analysis",
+            }
+        ],
+    }
+    assert len(session.calls) == 1
+    method_name, script, kwargs = session.calls[0]
+    assert method_name == "run_python_script"
+    assert "ExtAPI.DataModel" in script
+    assert "Model" in script
+    assert "Analyses" in script
+    assert "AnalysisList" in script
+    assert kwargs == {
+        "enable_logging": False,
+        "log_level": "WARNING",
+        "progress_interval": 2000,
+    }
+
+
+def test_inspect_mechanical_model_allows_missing_optional_analysis_fields() -> None:
+    session = FakeMechanicalSession(
+        inline_result='{"product_version": null, "analyses": [{"name": "A"}]}'
+    )
+
+    result = inspect_mechanical_model(session)
+
+    assert result.success is True
+    assert result.data == {
+        "product_version": None,
+        "analyses": [
+            {
+                "name": "A",
+                "object_id": None,
+                "type": None,
+                "category": None,
+            }
+        ],
+    }
+
+
+def test_inspect_mechanical_model_wraps_execution_errors() -> None:
+    result = inspect_mechanical_model(FakeMechanicalSession(fail=True))
+
+    assert result.success is False
+    assert result.error == "MECHANICAL_MODEL_INSPECTION_EXECUTION_FAILED"
+    assert "script execution" in result.message
+    assert result.data["execution"]["error"] == "MECHANICAL_SCRIPT_EXECUTION_FAILED"
+    assert "license unavailable" in result.data["execution"]["message"]
+
+
+def test_inspect_mechanical_model_wraps_invalid_json() -> None:
+    result = inspect_mechanical_model(FakeMechanicalSession(inline_result="not json"))
+
+    assert result.success is False
+    assert result.error == "MECHANICAL_MODEL_INSPECTION_PARSE_FAILED"
+    assert "invalid JSON" in result.message
+    assert result.data == {"raw_result": "not json"}
+
+
+def test_inspect_mechanical_model_requires_json_object_payload() -> None:
+    result = inspect_mechanical_model(FakeMechanicalSession(inline_result="[]"))
+
+    assert result.success is False
+    assert result.error == "MECHANICAL_MODEL_INSPECTION_PARSE_FAILED"
+    assert "JSON object" in result.message
+
+
+def test_inspect_mechanical_model_requires_analysis_list() -> None:
+    session = FakeMechanicalSession(
+        inline_result='{"product_version": "2025 R2", "analyses": {}}'
+    )
+
+    result = inspect_mechanical_model(session)
+
+    assert result.success is False
+    assert result.error == "MECHANICAL_MODEL_INSPECTION_PARSE_FAILED"
+    assert "'analyses' must be a list" in result.message
