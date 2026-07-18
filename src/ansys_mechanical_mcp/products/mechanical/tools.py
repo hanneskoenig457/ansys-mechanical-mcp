@@ -8,6 +8,8 @@ needs a broader workflow.
 from __future__ import annotations
 
 import json
+import math
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +19,10 @@ DEFAULT_LOG_LEVEL = "WARNING"
 DEFAULT_PROGRESS_INTERVAL = 2000
 
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR"})
+_INSPECTION_FUNCTION_NAME = "__ansys_mechanical_mcp_inspect_model_v1"
 
 
-MECHANICAL_MODEL_INSPECTION_SCRIPT = """
+_MECHANICAL_MODEL_INSPECTION_BODY = """
 # Conservative read-only inspection using ExtAPI.DataModel.
 import json
 
@@ -84,8 +87,22 @@ payload = {
     "analyses": [_analysis_metadata(analysis) for analysis in analysis_list],
 }
 
-json.dumps(payload)
 """.strip()
+
+MECHANICAL_MODEL_INSPECTION_SCRIPT = (
+    f"def {_INSPECTION_FUNCTION_NAME}():\n"
+    "    def _inspect():\n"
+    f"{textwrap.indent(_MECHANICAL_MODEL_INSPECTION_BODY, '        ')}\n"
+    "        return json.dumps(payload)\n"
+    "    try:\n"
+    "        return _inspect()\n"
+    "    finally:\n"
+    "        try:\n"
+    f"            del globals()['{_INSPECTION_FUNCTION_NAME}']\n"
+    "        except Exception:\n"
+    "            pass\n"
+    f"{_INSPECTION_FUNCTION_NAME}()"
+)
 
 
 def execute_mechanical_script(
@@ -181,7 +198,7 @@ def inspect_mechanical_model(session: Any) -> ToolResult:
         return ToolResult(
             success=False,
             message="Mechanical model inspection did not return JSON text.",
-            data={"raw_result": raw_result},
+            data={"raw_result": _json_diagnostic(raw_result)},
             error="MECHANICAL_MODEL_INSPECTION_PARSE_FAILED",
         )
 
@@ -289,7 +306,18 @@ def _normalize_model_inspection_payload(payload: Any) -> dict[str, Any]:
 def _get_required_method(session: Any, method_name: str) -> Any:
     method = getattr(session, method_name, None)
     if not callable(method):
-        raise AttributeError(
-            f"Mechanical session must provide a callable '{method_name}' method."
-        )
+        raise AttributeError(f"Mechanical session must provide a callable '{method_name}' method.")
     return method
+
+
+def _json_diagnostic(value: Any) -> Any:
+    """Return a JSON-compatible diagnostic without leaking native proxy objects."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return {"python_type": "float", "text": str(value)}
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    try:
+        text = str(value)
+    except Exception:  # pragma: no cover - defensive around native proxy repr/str.
+        text = None
+    return {"python_type": type(value).__name__, "text": text}

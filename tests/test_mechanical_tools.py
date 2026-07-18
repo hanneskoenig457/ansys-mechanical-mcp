@@ -1,6 +1,10 @@
+import json
 from pathlib import Path
 
+import pytest
+
 from ansys_mechanical_mcp.products.mechanical.tools import (
+    MECHANICAL_MODEL_INSPECTION_SCRIPT,
     execute_mechanical_script,
     inspect_mechanical_model,
 )
@@ -228,6 +232,25 @@ def test_inspect_mechanical_model_runs_data_model_script() -> None:
     }
 
 
+def test_inspection_script_does_not_leave_helper_globals_in_mechanical_scope() -> None:
+    class DataModel:
+        pass
+
+    class ExtApi:
+        pass
+
+    script_body, inspection_call = MECHANICAL_MODEL_INSPECTION_SCRIPT.rsplit("\n", 1)
+    ext_api = ExtApi()
+    ext_api.DataModel = DataModel()
+    namespace = {"ExtAPI": ext_api}
+    exec(f"{script_body}\n__test_inspection_result = {inspection_call}", namespace)
+
+    payload = json.loads(namespace["__test_inspection_result"])
+    assert payload == {"product_version": None, "analyses": []}
+    assert "_safe_getattr" not in namespace
+    assert not any(name.startswith("__ansys_mechanical_mcp_inspect") for name in namespace)
+
+
 def test_inspect_mechanical_model_allows_missing_optional_analysis_fields() -> None:
     session = FakeMechanicalSession(
         inline_result='{"product_version": null, "analyses": [{"name": "A"}]}'
@@ -277,12 +300,36 @@ def test_inspect_mechanical_model_requires_json_object_payload() -> None:
 
 
 def test_inspect_mechanical_model_requires_analysis_list() -> None:
-    session = FakeMechanicalSession(
-        inline_result='{"product_version": "2025 R2", "analyses": {}}'
-    )
+    session = FakeMechanicalSession(inline_result='{"product_version": "2025 R2", "analyses": {}}')
 
     result = inspect_mechanical_model(session)
 
     assert result.success is False
     assert result.error == "MECHANICAL_MODEL_INSPECTION_PARSE_FAILED"
     assert "'analyses' must be a list" in result.message
+
+
+def test_inspect_mechanical_model_keeps_invalid_proxy_response_json_compatible() -> None:
+    class NativeProxy:
+        def __str__(self) -> str:
+            return "native-proxy"
+
+    session = FakeMechanicalSession(inline_result=NativeProxy())  # type: ignore[arg-type]
+
+    result = inspect_mechanical_model(session)
+
+    assert result.success is False
+    assert result.error == "MECHANICAL_MODEL_INSPECTION_PARSE_FAILED"
+    assert result.data == {"raw_result": {"python_type": "NativeProxy", "text": "native-proxy"}}
+    assert json.loads(json.dumps(result.to_dict())) == result.to_dict()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_inspect_mechanical_model_keeps_nonfinite_response_json_compatible(value: float) -> None:
+    session = FakeMechanicalSession(inline_result=value)  # type: ignore[arg-type]
+
+    result = inspect_mechanical_model(session)
+
+    assert result.success is False
+    assert result.data["raw_result"]["python_type"] == "float"
+    assert json.loads(json.dumps(result.to_dict(), allow_nan=False)) == result.to_dict()

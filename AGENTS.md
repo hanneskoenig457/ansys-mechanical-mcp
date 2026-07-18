@@ -94,6 +94,27 @@ Do not put everything into `server.py`.
 Do not add empty product adapters for future scope unless a real workflow needs
 them.
 
+## Native Selection Direction
+
+The current prototype implements Mechanical-native, read-only selection capture
+through a persistent stdio MCP application context. This path is fake-tested but
+still requires opt-in validation against a licensed interactive Mechanical
+installation.
+
+- Keep deterministic selection capture separate from optional semantic or LLM
+  explanation.
+- Keep selection explanation separate from any mutating engineering action.
+- Treat native entity IDs as model- and revision-scoped, not as portable IDs.
+- Resolve and validate targets again in the native CAE application immediately
+  before mutation.
+- Treat a build123d/OpenCascade viewer and a build123d-based CAD preprocessor as
+  two distinct optional future roles, neither of which is an MVP dependency.
+- Do not choose or imply the first supported physical phenomenon until that
+  scope is decided explicitly.
+
+See `docs/selection-context-architecture.md` for the full decision and safety
+boundary.
+
 ## Initial Target Workflow
 
 The first real workflow should support:
