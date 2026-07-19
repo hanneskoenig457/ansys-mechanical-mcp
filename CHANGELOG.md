@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Add a safety-bounded Mechanical gRPC transport policy with explicit
+  `auto`, `wnua`, `mtls`, and `insecure` modes. Local auto-start now performs
+  an exact-executable PyMechanical revision/service-pack preflight, preserves
+  secure transport when supported, and requires a persistent explicit local
+  `insecure` choice for legacy service packs; connect mode never auto-downgrades.
+- Scope requested revision discovery to the exact local executable, reject
+  mismatches and unsupported pre-242 releases before launch, and prevent local
+  start mode from falling through to implicit remote PyPIM launch.
+- Reject WNUA for non-loopback hosts and require a separate explicit
+  acknowledgement for insecure remote connections. Include effective
+  transport, security, scope, preflight evidence, warnings, and establishment
+  attempts in JSON-compatible session context.
+- Use one launch attempt only and latch start failures so repeated inspection
+  cannot create another Mechanical process. Retain successful session reuse
+  and allow non-starting connection retries.
+- Find PyMechanical CLI launchers in the running Python environment's scripts
+  directory when they are absent from `PATH`, mark `mechanical-env` as
+  Linux-only, and clarify that CLI discovery does not prove a Mechanical
+  product installation or license.
 - Add a stable-MCP-v1 lifespan context around the existing
   `MechanicalSessionManager`, including explicit start/connect configuration,
   serialized session use off the async event loop, immutable ownership policy,

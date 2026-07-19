@@ -8,11 +8,30 @@ import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
 import ansys_mechanical_mcp.server as server_module
+import ansys_mechanical_mcp.products.mechanical.session as session_module
 from ansys_mechanical_mcp.products.mechanical.session import (
     MechanicalSessionConfig,
     MechanicalSessionManager,
 )
+from ansys_mechanical_mcp.products.mechanical.transport import MechanicalTransportPreflight
 from ansys_mechanical_mcp.server import create_mcp_server
+
+
+@pytest.fixture(autouse=True)
+def deterministic_fake_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep MCP fake tests independent from PyMechanical and the host OS."""
+    monkeypatch.setattr(session_module.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        session_module,
+        "discover_start_transport",
+        lambda _exec_file, _requested_revision, *, system_name: MechanicalTransportPreflight(
+            status="supported",
+            exact_executable_validated=True,
+            detected_revision=261,
+            secure_transport_supported=True,
+            source="unit_test",
+        ),
+    )
 
 
 class FakeMechanicalSession:
@@ -99,6 +118,39 @@ def test_cli_started_ui_cleanup_requires_explicit_opt_in(
     assert captured["config"].effective_cleanup_on_exit is False
 
 
+def test_cli_parses_transport_and_remote_security_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    class FakeServer:
+        def run(self, *, transport: str) -> None:
+            captured["transport"] = transport
+
+    def fake_create_mcp_server(*, session_config):
+        captured["config"] = session_config
+        return FakeServer()
+
+    monkeypatch.setattr(server_module, "create_mcp_server", fake_create_mcp_server)
+
+    server_module.main(
+        [
+            "--mechanical-mode",
+            "connect",
+            "--mechanical-host",
+            "mechanical.example.test",
+            "--mechanical-transport-mode",
+            "insecure",
+            "--mechanical-allow-insecure-remote",
+        ]
+    )
+
+    config = captured["config"]
+    assert config.transport_mode == "insecure"
+    assert config.allow_insecure_remote is True
+    assert captured["transport"] == "stdio"
+
+
 @pytest.mark.anyio
 async def test_check_environment_tool_returns_structured_payload_without_lifespan() -> None:
     server = create_mcp_server()
@@ -135,7 +187,7 @@ async def test_selection_tool_requires_explicit_start_or_connect_mode() -> None:
 
 @pytest.mark.anyio
 async def test_inspection_mcp_roundtrip_reuses_session_and_cleans_up_once() -> None:
-    session = FakeMechanicalSession('{"product_version":"2026 R1","analyses":[]}')
+    session = FakeMechanicalSession('{"product_version":"2025 R1","analyses":[]}')
     launch_calls = []
 
     def launch_mechanical(**kwargs):
@@ -143,8 +195,18 @@ async def test_inspection_mcp_roundtrip_reuses_session_and_cleans_up_once() -> N
         return session
 
     manager = MechanicalSessionManager(
-        MechanicalSessionConfig(mode="start"),
+        MechanicalSessionConfig(mode="start", transport_mode="insecure"),
         launch_mechanical=launch_mechanical,
+        transport_preflight=lambda _exec_file, _requested_revision: MechanicalTransportPreflight(
+            status="unsupported",
+            executable_path=r"C:\Ansys\v251\AnsysWBU.exe",
+            exact_executable_validated=True,
+            detected_revision=251,
+            secure_transport_supported=False,
+            required_secure_service_pack="SP04",
+            source="unit_test",
+        ),
+        system_name="Windows",
     )
     server = create_mcp_server(session_manager=manager)
     event_loop_thread_id = threading.get_ident()
@@ -158,12 +220,16 @@ async def test_inspection_mcp_roundtrip_reuses_session_and_cleans_up_once() -> N
 
         assert first.isError is False
         assert first.structuredContent["success"] is True
-        assert first.structuredContent["data"] == {
-            "product_version": "2026 R1",
-            "analyses": [],
-        }
+        assert first.structuredContent["data"]["product_version"] == "2025 R1"
+        assert first.structuredContent["data"]["analyses"] == []
+        session_context = first.structuredContent["data"]["session_context"]
+        assert session_context["transport"]["effective_mode"] == "insecure"
+        assert session_context["transport"]["fallback_attempted"] is False
+        assert session_context["establishment"]["attempt_count"] == 1
         assert second.structuredContent == first.structuredContent
         assert len(launch_calls) == 1
+        assert launch_calls[0]["transport_mode"] == "insecure"
+        assert "port" not in launch_calls[0]
         assert len(session.script_calls) == 2
         assert all(thread_id != event_loop_thread_id for thread_id in session.script_thread_ids)
         assert session.exit_calls == []
@@ -234,6 +300,97 @@ async def test_inspection_returns_structured_start_error() -> None:
     assert structured["error"] == "MECHANICAL_SESSION_START_FAILED"
     assert structured["data"]["operation"] == "start"
     assert "license unavailable" in structured["message"]
+
+
+@pytest.mark.anyio
+async def test_inspection_returns_structured_transport_preflight_error_without_launch() -> None:
+    launch_calls = []
+    manager = MechanicalSessionManager(
+        MechanicalSessionConfig(mode="start"),
+        launch_mechanical=lambda **kwargs: launch_calls.append(kwargs) or object(),
+        transport_preflight=lambda _exec_file, _requested_revision: MechanicalTransportPreflight(
+            status="unknown",
+            source="unit_test",
+            message="builddate.txt missing",
+        ),
+        system_name="Windows",
+    )
+    server = create_mcp_server(session_manager=manager)
+
+    async with create_connected_server_and_client_session(server) as client:
+        first = await client.call_tool("inspect_mechanical_model", {})
+        second = await client.call_tool("inspect_mechanical_model", {})
+
+    for result in (first, second):
+        assert result.isError is True
+        assert result.structuredContent["error"] == "MECHANICAL_TRANSPORT_PREFLIGHT_FAILED"
+        assert result.structuredContent["data"]["operation"] == "preflight_transport"
+        transport = result.structuredContent["data"]["session_context"]["transport"]
+        assert transport["effective_mode"] is None
+        assert transport["fallback_attempted"] is False
+    assert launch_calls == []
+
+
+@pytest.mark.anyio
+async def test_legacy_auto_start_requires_structured_insecure_opt_in() -> None:
+    launch_calls = []
+    manager = MechanicalSessionManager(
+        MechanicalSessionConfig(mode="start", version="251"),
+        launch_mechanical=lambda **kwargs: launch_calls.append(kwargs) or object(),
+        transport_preflight=lambda _exec_file, _requested_revision: (
+            MechanicalTransportPreflight(
+                status="unsupported",
+                detected_revision=251,
+                required_secure_service_pack="SP04",
+                source="unit_test",
+            )
+        ),
+        system_name="Windows",
+    )
+    server = create_mcp_server(session_manager=manager)
+
+    async with create_connected_server_and_client_session(server) as client:
+        first = await client.call_tool("inspect_mechanical_model", {})
+        second = await client.call_tool("inspect_mechanical_model", {})
+
+    for result in (first, second):
+        assert result.isError is True
+        structured = result.structuredContent
+        assert structured["error"] == "MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED"
+        assert structured["data"]["operation"] == "acknowledge_insecure_transport"
+        assert structured["data"]["session_context"]["establishment"] == {
+            "status": "failed",
+            "attempt_count": 0,
+            "start_retry_blocked": True,
+        }
+    assert launch_calls == []
+
+
+@pytest.mark.anyio
+async def test_incompatible_revision_returns_structured_error_without_launch() -> None:
+    launch_calls = []
+    manager = MechanicalSessionManager(
+        MechanicalSessionConfig(mode="start", transport_mode="insecure"),
+        launch_mechanical=lambda **kwargs: launch_calls.append(kwargs) or object(),
+        transport_preflight=lambda _exec_file, _requested_revision: (
+            MechanicalTransportPreflight(
+                status="incompatible",
+                detected_revision=231,
+                source="unit_test",
+                message="PyMechanical requires revision 242 or later.",
+            )
+        ),
+        system_name="Windows",
+    )
+    server = create_mcp_server(session_manager=manager)
+
+    async with create_connected_server_and_client_session(server) as client:
+        result = await client.call_tool("inspect_mechanical_model", {})
+
+    assert result.isError is True
+    assert result.structuredContent["error"] == "MECHANICAL_TRANSPORT_INCOMPATIBLE"
+    assert result.structuredContent["data"]["operation"] == "select_transport"
+    assert launch_calls == []
 
 
 @pytest.mark.anyio
@@ -332,7 +489,17 @@ async def test_selection_mcp_roundtrip_connects_to_declared_gui_session() -> Non
     assert result.isError is False
     assert structured["success"] is True
     assert structured["data"]["snapshot"]["entity_type"] == "face"
-    assert connect_calls == [{"cleanup_on_exit": False, "port": 10000}]
+    session_context = structured["data"]["snapshot"]["session_context"]
+    assert session_context["establishment"]["status"] == "established"
+    assert session_context["transport"]["effective_mode"] == "wnua"
+    assert connect_calls == [
+        {
+            "cleanup_on_exit": False,
+            "ip": "127.0.0.1",
+            "transport_mode": "wnua",
+            "port": 10000,
+        }
+    ]
     assert session.exit_calls == []
 
 

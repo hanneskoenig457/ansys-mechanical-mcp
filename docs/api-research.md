@@ -36,11 +36,74 @@ Track official sources and verified API decisions here.
   to launch and `ansys.mechanical.core.Mechanical(...)` or
   `connect_to_mechanical(...)` to connect to an existing Mechanical server.
   Source: https://mechanical.docs.pyansys.com/version/stable/getting_started/running_mechanical.html
+- PyMechanical gRPC transport: require `ansys-mechanical-core>=0.12.12` for the
+  implemented boundary and pass `transport_mode` explicitly. PyMechanical
+  documents `wnua`, `mtls`, and `insecure`; its platform defaults are WNUA on
+  Windows and mTLS on Linux. Secure modes require 2024 R2/242 SP05+, 2025
+  R1/251 SP04+, 2025 R2/252 SP03+, or any 2026 R1/261+ service pack. Earlier
+  listed service packs support insecure transport only. PyMechanical 0.12.12's
+  supported Mechanical boundary begins at 2024 R2/242, so the MCP blocks older
+  revisions rather than interpreting the security matrix as full client support.
+  Sources:
+  https://mechanical.docs.pyansys.com/version/stable/user_guide/remote_session/grpc_security.html
+  and
+  https://mechanical.docs.pyansys.com/version/stable/getting_started/installation.html
+- Local transport selection: default the MCP policy to `auto`, but only after
+  mode remains explicitly `start` or `connect`. For a local start, resolve the
+  exact executable through `ansys.tools.common.path.get_mechanical_path()`,
+  derive its revision with `version_from_path()`, and apply the documented
+  `has_grpc_service_pack()` rule before any launch call. Pass a requested
+  three-digit revision into path discovery and pass the same resolved path back
+  as `exec_file`; a requested/detected mismatch blocks launch. Cross-check an
+  explicit SP marker in that executable's `builddate.txt` with PyMechanical.
+  Unknown or conflicting evidence never authorizes automatic insecure
+  transport; a persisted explicit local choice remains auditable. A confirmed
+  legacy SP returns
+  `MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` with zero launch calls because
+  that release cannot accept the newer host-binding argument. One persisted
+  explicit local `insecure` choice is required; this is not a runtime fallback.
+  Sources:
+  https://tools.docs.pyansys.com/version/stable/api/ansys/tools/common/path/path/index.html
+  and
+  https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/misc/index.html
+- Local `version` scopes path discovery, but remains a request rather than proof.
+  Current `launch_mechanical()` documentation assigns `version` to PyPIM when
+  `exec_file` is absent and identifies `exec_file` as the exact local selector.
+  The derived exact-path revision is therefore authoritative. Preflight reports
+  `detected_service_pack` only when the exact build metadata contains an
+  explicit SP marker; otherwise it remains `null`. A validated exact executable
+  is mandatory so local start cannot silently delegate to PyPIM.
+  Source:
+  https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/mechanical/index.html
+- Transport retry boundary: never implement a secure-then-insecure launch
+  retry. In PyMechanical 0.12.12, the observed SP compatibility exception is
+  raised while command-line arguments are built before `subprocess.Popen`, so
+  that exact failure starts no OS process. However, the chosen port has already
+  been appended to PyMechanical's `LOCAL_PORTS`. Other failures can occur after
+  process creation, and the launcher does not retain a process handle for a
+  general rollback. The manager therefore makes at most one launch attempt and
+  latches a start failure until MCP restart.
+  Sources:
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/mechanical.py#L2129-L2172
+  and
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/launcher.py#L127-L219
+- Connect transport boundary: the client transport must match the existing
+  server. There is no reliable pre-connection product/SP query, so connect mode
+  never auto-downgrades. Explicit loopback classification uses only
+  `localhost` or loopback IP literals, without DNS inference. Non-loopback auto
+  mode selects mTLS; remote insecure requires a second explicit acknowledgement.
+  WNUA is Windows-only and PyMechanical accepts only exact `localhost` or
+  `127.0.0.1`; the adapter canonicalizes an accepted WNUA endpoint.
+  Sources:
+  https://mechanical.docs.pyansys.com/version/stable/user_guide/remote_session/grpc_security.html
+  and
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/mechanical.py#L803-L844
 - Treat `version` as a launch-only requested value and never as a connected
   version selector. Current stable PyMechanical notes that `version` selects a
-  PyPIM product; exact local executable selection uses `exec_file`, which is not
-  yet part of this narrow configuration. The actual connected/started product
-  version remains an inspection result and needs live validation.
+  PyPIM product; exact local executable selection uses `exec_file`, which the
+  session configuration now accepts and auto preflight resolves when omitted.
+  The actual connected/started product version remains an inspection result and
+  needs live validation.
   Source: https://mechanical.docs.pyansys.com/version/stable/user_guide/remote_session/overview.html
 - PyMechanical script execution: use `Mechanical.run_python_script(...)` or
   `Mechanical.run_python_script_from_file(...)`; the API returns the string value
@@ -52,6 +115,15 @@ Track official sources and verified API decisions here.
   `cleanup_on_exit=False`; only a started headless session defaults to automatic
   cleanup. Configuration is immutable after manager creation.
   Source: https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/mechanical/Mechanical.html
+- Environment executable diagnostics cover Python-side PyMechanical commands,
+  not `AnsysWBU.exe`. Search `PATH` first and then the running Python
+  environment's scripts directory. `mechanical-env` is a Linux-only embedding
+  helper; its absence on Windows is not a workflow failure. A CLI hit does not
+  prove a Mechanical product installation, license, GUI, or gRPC server.
+  Sources:
+  https://mechanical.docs.pyansys.com/version/stable/user_guide/cli/ansys-mechanical.html
+  and
+  https://mechanical.docs.pyansys.com/version/stable/user_guide/cli/mechanical-env.html
 - Mechanical model inspection: use the Mechanical scripting `DataModel` object,
   including `AnalysisList`, `AnalysisNames`, and object lookup methods.
   Source: https://scripting.mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/stubs/v261/Ansys/ACT/Interfaces/Mechanical/IMechanicalDataModel.html
@@ -180,11 +252,26 @@ against the exact locally supported Mechanical versions.
 
 ## Implemented and Validated Boundary
 
+### Returned Windows evidence before this change
+
+The licensed validation machine reported PyMechanical 0.12.12 with Mechanical
+2025 R1 revision 251, SP03, build `R251RC2P03`. A configured local UI start on
+port 10000 failed before the GUI with `MECHANICAL_SESSION_START_FAILED` and
+PyMechanical's message that revision 251 requires SP04+ for secure transport.
+This is external live evidence supplied to the Mac development cycle, not a
+round trip performed on this Mac. The new transport preflight and explicit
+legacy opt-in path still require fresh Windows validation.
+
 Implemented in this repository:
 
 - a lazy, persistent `MechanicalSessionManager` in the FastMCP lifespan;
 - explicit start/connect, version, host, port, batch/UI, cleanup, and ownership
   configuration;
+- pre-launch `auto` transport selection for an exact local executable, explicit
+  legacy-local insecure opt-in, no start retry, remote mTLS default, and
+  acknowledged-only insecure remote connect;
+- structured runtime transport/preflight/attempt context on both inspection and
+  selection results;
 - immutable cleanup policy plus idempotent cleanup after success and retained
   session state for retry after a cleanup failure;
 - structured `inspect_mechanical_model` and `capture_current_selection` tools;
@@ -203,6 +290,10 @@ Validated without Ansys through injected fakes and an in-process MCP round trip:
 - explicit configuration, start and connect behavior, session reuse, immutable
   ownership, UI-safe defaults, retryable/idempotent cleanup, concurrent-call
   serialization, async offload, and enforced stdio-only transport;
+- compatible auto selection, legacy-SP zero-launch opt-in, explicit local
+  insecure selection, unknown-preflight refusal, revision mismatch and
+  unsupported-release rejection, loopback/remote policy, remote-insecure
+  acknowledgement, one-attempt start failure latching, and retryable connect failures;
 - dependency, launch/license-like, connect, script, parse, GUI-mode, and invalid
   native-response failures;
 - empty, single, multiple, general-interface, rich-interface, mesh ID,
@@ -217,6 +308,8 @@ Not validated against a real Mechanical runtime:
 - GUI selection capture for local and remote connected sessions;
 - native proxy type text used for face/edge/vertex/body normalization;
 - real license, transport, shutdown, and UI-thread failure behavior;
+- exact Windows `builddate.txt` content, 251 SP03 explicit-insecure launch,
+  legacy listener binding, WNUA/mTLS handshakes, and post-launch process behavior;
 - any model/document/revision identifier beyond the nullable fields currently
   returned by the conservative script.
 

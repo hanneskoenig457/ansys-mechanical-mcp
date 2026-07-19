@@ -26,6 +26,12 @@ def _session_config(*, interactive: bool = False) -> MechanicalSessionConfig:
         port=int(port_text) if port_text else None,
         version=os.getenv("ANSYS_MECHANICAL_MCP_VERSION") if mode == "start" else None,
         batch=False if interactive else None,
+        transport_mode=os.getenv("ANSYS_MECHANICAL_MCP_TRANSPORT", "auto"),  # type: ignore[arg-type]
+        certs_dir=os.getenv("ANSYS_MECHANICAL_MCP_CERTS_DIR"),
+        allow_insecure_remote=(
+            os.getenv("ANSYS_MECHANICAL_MCP_ALLOW_INSECURE_REMOTE") == "1"
+        ),
+        exec_file=os.getenv("ANSYS_MECHANICAL_MCP_EXEC_FILE") if mode == "start" else None,
     )
 
 

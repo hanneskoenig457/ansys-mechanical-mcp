@@ -42,7 +42,7 @@ dependencies = [
 
 [project.optional-dependencies]
 ansys = [
-  "ansys-mechanical-core",
+  "ansys-mechanical-core>=0.12.12",
   "ansys-dpf-core",
 ]
 dev = [

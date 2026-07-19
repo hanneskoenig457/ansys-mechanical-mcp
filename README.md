@@ -31,7 +31,9 @@ unexposed. The project does not simulate solver behavior.
 
 Mechanical access is opt-in: omitting `--mechanical-mode` leaves the server
 unconfigured, and either Mechanical tool returns a structured configuration
-error instead of choosing start or connect on the user's behalf.
+error instead of choosing start or connect on the user's behalf. Once start or
+connect is explicit, the gRPC transport defaults to the safety-bounded `auto`
+policy described below.
 
 ## Project Direction
 
@@ -63,8 +65,9 @@ implementation path.
 
 The initial prototype is intentionally narrow:
 
-- Check the local Python, MCP, PyMechanical, PyDPF, executable, and Ansys
-  environment state.
+- Check the local Python, MCP, PyMechanical, PyDPF, PyMechanical CLI, and Ansys
+  environment state. CLI discovery is not a Mechanical-product or license
+  check.
 - Start or connect to Ansys Mechanical through PyMechanical.
 - Execute controlled Mechanical scripts as a fallback.
 - Inspect the current Mechanical model and analyses at a basic level.
@@ -130,6 +133,35 @@ could discard unsaved edits. Pass `--mechanical-cleanup-on-exit` only when that
 is explicitly acceptable. Started headless sessions are cleaned up by default;
 connected sessions are left running by default.
 
+Mechanical gRPC transport defaults to `--mechanical-transport-mode auto`:
+
+- A local start resolves the exact Mechanical executable, checks its revision
+  and official PyMechanical service-pack compatibility before launching, and
+  makes at most one launch call. It uses WNUA on compatible Windows installs,
+  and mTLS on compatible Linux installs.
+- A confirmed legacy service pack does not auto-downgrade. Auto mode returns
+  `MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` without launching. Persist
+  `--mechanical-transport-mode insecure` only after accepting the local risk;
+  the result then carries an insecure-transport warning and an unverified
+  listener-binding warning.
+- If executable or build evidence is unknown, auto mode does not downgrade or
+  launch. It returns a structured preflight error.
+- A connect operation never falls back from secure to insecure. Loopback uses
+  the secure platform default; non-loopback defaults to mTLS. The client mode
+  must match the already-running server.
+- An insecure non-loopback connection requires both
+  `--mechanical-transport-mode insecure` and
+  `--mechanical-allow-insecure-remote`. Its session context carries an explicit
+  warning.
+
+Use `--mechanical-exec-file` when path discovery does not select the desired
+local installation; a mismatch between the requested revision and resolved
+executable blocks launch. Local start always requires a validated exact
+executable and never falls through to implicit PyPIM. mTLS certificates can be
+supplied with `--mechanical-certs-dir`. A failed local start is not retried
+inside the same MCP process, because a late PyMechanical failure can leave a
+process behind; restart the MCP server after resolving the cause.
+
 A selection capture never starts a new process implicitly: first establish a
 configured GUI session with `inspect_mechanical_model`, select entities in
 Mechanical, and then call `capture_current_selection`. Native arrays are bounded
@@ -164,6 +196,7 @@ ANSYS_MECHANICAL_MCP_RUN_INTEGRATION=1 \
 ANSYS_MECHANICAL_MCP_MODE=connect \
 ANSYS_MECHANICAL_MCP_HOST=127.0.0.1 \
 ANSYS_MECHANICAL_MCP_PORT=10000 \
+ANSYS_MECHANICAL_MCP_TRANSPORT=auto \
 .venv/bin/python -m pytest tests/integration
 ```
 

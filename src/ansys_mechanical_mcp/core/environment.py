@@ -6,6 +6,7 @@ import os
 import platform
 import shutil
 import sys
+import sysconfig
 from collections.abc import Callable, Iterable, Mapping
 from importlib import metadata
 from typing import Any
@@ -35,6 +36,8 @@ def collect_environment(
     version_lookup: VersionLookup = metadata.version,
     executable_lookup: ExecutableLookup = shutil.which,
     python_version_info: tuple[int, int, int] | None = None,
+    python_scripts_path: str | None = None,
+    platform_system_name: str | None = None,
 ) -> dict[str, Any]:
     """Collect JSON-compatible environment details.
 
@@ -46,11 +49,18 @@ def collect_environment(
     env = environ if environ is not None else os.environ
     required = tuple(required_packages)
     optional = tuple(optional_packages)
+    scripts_path = python_scripts_path or sysconfig.get_path("scripts")
+    system_name = platform_system_name or platform.system()
 
     required_status = {name: _package_status(name, version_lookup) for name in required}
     optional_status = {name: _package_status(name, version_lookup) for name in optional}
     executable_status = {
-        name: {"available": (path := executable_lookup(name)) is not None, "path": path}
+        name: _pymechanical_cli_status(
+            name,
+            executable_lookup=executable_lookup,
+            python_scripts_path=scripts_path,
+            platform_system_name=system_name,
+        )
         for name in executable_names
     }
 
@@ -64,7 +74,7 @@ def collect_environment(
             "executable": sys.executable,
         },
         "platform": {
-            "system": platform.system(),
+            "system": system_name,
             "release": platform.release(),
             "machine": platform.machine(),
         },
@@ -79,6 +89,15 @@ def collect_environment(
             ],
         },
         "executables": executable_status,
+        "executable_diagnostic_scope": (
+            "PyMechanical Python CLI commands only; this does not prove that the Mechanical "
+            "product or a license is installed."
+        ),
+        "mechanical_runtime": {
+            "product_installation": "not_checked",
+            "license": "not_checked",
+            "grpc_connectivity": "not_checked",
+        },
         "ansys_environment": _ansys_environment(env),
     }
 
@@ -94,6 +113,10 @@ def check_environment() -> ToolResult:
     data["ready"] = {
         "mcp_server": mcp_server_ready,
         "ansys_workflows": ansys_workflow_ready,
+        "ansys_workflows_scope": "python_dependencies_only",
+        "mechanical_product": None,
+        "mechanical_license": None,
+        "mechanical_runtime": None,
     }
 
     if not python_supported:
@@ -121,7 +144,10 @@ def check_environment() -> ToolResult:
 
     return ToolResult(
         success=True,
-        message="Environment is ready for the v0.1 Ansys Mechanical workflow.",
+        message=(
+            "Python dependencies for the v0.1 Ansys Mechanical workflow are installed; "
+            "the Mechanical product, license, and runtime connectivity were not checked."
+        ),
         data=data,
     )
 
@@ -135,6 +161,53 @@ def _package_status(name: str, version_lookup: VersionLookup) -> dict[str, str |
         return {"installed": False, "version": None, "error": str(exc)}
 
     return {"installed": True, "version": version}
+
+
+def _pymechanical_cli_status(
+    name: str,
+    *,
+    executable_lookup: ExecutableLookup,
+    python_scripts_path: str,
+    platform_system_name: str,
+) -> dict[str, str | bool | None]:
+    """Locate a PyMechanical CLI on PATH or beside the running venv Python."""
+    applicable = not (name == "mechanical-env" and platform_system_name != "Linux")
+    if not applicable:
+        return {
+            "available": False,
+            "path": None,
+            "source": None,
+            "kind": "pymechanical_cli",
+            "applicable": False,
+            "note": "mechanical-env is a Linux-only PyMechanical embedding helper.",
+        }
+
+    path = executable_lookup(name)
+    source = "path" if path is not None else None
+    if path is None:
+        scripts_candidate = os.path.join(python_scripts_path, name)
+        path = executable_lookup(scripts_candidate)
+        if (
+            path is None
+            and platform_system_name == "Windows"
+            and not scripts_candidate.lower().endswith(".exe")
+        ):
+            # Python 3.10/3.11 do not apply PATHEXT when shutil.which() receives
+            # a command containing a directory component. Check pip's Windows
+            # console-script suffix explicitly while retaining the injectable
+            # one-argument lookup used by environment tests.
+            path = executable_lookup(f"{scripts_candidate}.exe")
+        if path is not None:
+            source = "python_scripts"
+
+    return {
+        "available": path is not None,
+        "path": path,
+        "source": source,
+        "kind": "pymechanical_cli",
+        "applicable": True,
+        "note": None,
+    }
 
 
 def _ansys_environment(environ: Mapping[str, str]) -> dict[str, Any]:

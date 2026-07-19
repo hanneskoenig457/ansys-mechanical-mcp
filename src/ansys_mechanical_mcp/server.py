@@ -178,6 +178,35 @@ def main(argv: Sequence[str] | None = None) -> None:
         "--mechanical-version",
         help="Requested launch version for --mechanical-mode=start, for example 261.",
     )
+    parser.add_argument(
+        "--mechanical-exec-file",
+        help=(
+            "Exact local Mechanical executable for --mechanical-mode=start. When omitted, "
+            "PyMechanical path discovery selects the local executable used by transport preflight."
+        ),
+    )
+    parser.add_argument(
+        "--mechanical-transport-mode",
+        choices=("auto", "wnua", "mtls", "insecure"),
+        default="auto",
+        help=(
+            "Mechanical gRPC transport. 'auto' preflights a local start, keeps secure transport "
+            "when supported, requires explicit 'insecure' for legacy service packs, and never "
+            "downgrades a connect operation."
+        ),
+    )
+    parser.add_argument(
+        "--mechanical-certs-dir",
+        help="Certificate directory for Mechanical mTLS transport.",
+    )
+    parser.add_argument(
+        "--mechanical-allow-insecure-remote",
+        action="store_true",
+        help=(
+            "Explicitly acknowledge unencrypted, unauthenticated transport to a non-loopback "
+            "Mechanical host. Valid only with --mechanical-transport-mode=insecure."
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mechanical-batch",
@@ -215,6 +244,10 @@ def main(argv: Sequence[str] | None = None) -> None:
             cleanup_on_exit=args.mechanical_cleanup_on_exit,
             host=args.mechanical_host,
             port=args.mechanical_port,
+            transport_mode=args.mechanical_transport_mode,
+            certs_dir=args.mechanical_certs_dir,
+            allow_insecure_remote=args.mechanical_allow_insecure_remote,
+            exec_file=args.mechanical_exec_file,
         )
     except MechanicalSessionError as exc:
         parser.error(str(exc))

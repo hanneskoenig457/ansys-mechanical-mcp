@@ -81,10 +81,20 @@ The usual sequence is:
 
 1. Confirm that the expected MCP tools are registered.
 2. Call `check_environment`.
+   Treat `ansys-mechanical` and `mechanical-env` entries only as PyMechanical
+   Python CLI diagnostics. A launcher found beside `.venv\Scripts\python.exe`
+   is expected even when that directory is absent from `PATH`; it is not proof
+   of `AnsysWBU.exe`, a license, or a running server. `mechanical-env` is not
+   applicable on Windows.
 3. Call `inspect_mechanical_model` and observe whether the intended Mechanical
    GUI starts or the configured server connection succeeds.
 4. Record actual product version, service pack when available, start/connect
-   mode, GUI/batch mode, ownership, cleanup policy, and transport facts.
+   mode, GUI/batch mode, ownership, cleanup policy, and the full structured
+   transport context: policy, requested/effective mode, security, connection
+   scope, selected/effective host, listener binding, executable/revision
+   preflight, detected and required SP, warnings, attempt count, and retry
+   state. Do not infer an installed SP number from the required SP; a detected
+   SP is valid only when the exact build metadata contained an explicit marker.
 5. Call `inspect_mechanical_model` again and verify that no second unnecessary
    Mechanical instance starts.
 6. If the GUI contains an empty project, stop and ask the operator to open the
@@ -97,6 +107,22 @@ The usual sequence is:
 No live-validation handoff authorizes model mutation, mesh generation, solve,
 new physics, named selections, highlighting, or target resolution.
 
+Auto mode never starts a confirmed legacy SP insecurely. It first returns
+`MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` with attempt count zero. After
+the operator persists explicit local `insecure`, verify the listening endpoint
+immediately with a read-only operating-system query. The client target is
+loopback, but pre-secure Mechanical releases do not accept the newer
+`--grpc-host` flag; Windows must confirm whether the actual listener is
+loopback-only. Stop if it is exposed beyond loopback. Do not firewall, kill, or
+reconfigure unrelated processes without separate authorization.
+
+Do not retry a failed start by repeatedly calling inspection. The manager
+latches a start failure for the lifetime of the MCP process because a failure
+after process creation can leave Mechanical running. Record whether any GUI or
+process exists, resolve configuration outside the model, restart Codex/MCP, and
+then make one new attempt. Connect-only failures may retry and never trigger an
+automatic insecure fallback.
+
 ### 4. Return evidence
 
 Report fake-tested and real Mechanical results in separate sections. For a live
@@ -106,6 +132,9 @@ failure, retain at least:
 - PyMechanical version;
 - start or connect configuration, excluding secrets;
 - requested and effective transport information when available;
+- exact transport preflight and attempt context, including zero-launch legacy
+  opt-in evidence and the selected/effective state of any later explicit local
+  insecure run;
 - complete error code and message;
 - whether a GUI or process was created;
 - whether a retry created another process;

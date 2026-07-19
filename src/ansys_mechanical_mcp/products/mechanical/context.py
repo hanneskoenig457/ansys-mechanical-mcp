@@ -18,11 +18,15 @@ from ansys_mechanical_mcp.products.mechanical.selection import (
 )
 from ansys_mechanical_mcp.products.mechanical.session import (
     MechanicalDependencyError,
+    MechanicalInsecureTransportOptInRequired,
     MechanicalSessionConfigurationError,
     MechanicalSessionConnectError,
     MechanicalSessionError,
     MechanicalSessionManager,
     MechanicalSessionStartError,
+    MechanicalTransportCompatibilityError,
+    MechanicalTransportConfigurationError,
+    MechanicalTransportPreflightError,
 )
 from ansys_mechanical_mcp.products.mechanical.tools import inspect_mechanical_model
 
@@ -37,7 +41,7 @@ class MechanicalApplicationContext:
     @property
     def session_context(self) -> dict[str, Any]:
         """Return JSON-compatible configured session and ownership facts."""
-        return self.session_manager.config.to_dict()
+        return self.session_manager.session_context
 
     def inspect_model(self) -> ToolResult:
         """Inspect through the persistent session, connecting lazily if needed."""
@@ -46,7 +50,8 @@ class MechanicalApplicationContext:
                 session = self.session_manager.start_or_connect()
             except MechanicalSessionError as exc:
                 return _session_error_result(exc, self.session_context)
-            return inspect_mechanical_model(session)
+            result = inspect_mechanical_model(session)
+            return _with_session_context(result, self.session_context)
 
     def capture_selection(self) -> ToolResult:
         """Capture current GUI selection without silently launching a new session."""
@@ -93,11 +98,11 @@ class MechanicalApplicationContext:
                 return selection_error_result(
                     error=code,
                     message=str(exc),
-                    session_context=session_context,
+                    session_context=self.session_context,
                 )
             return capture_current_selection(
                 session,
-                session_context=session_context,
+                session_context=self.session_context,
             )
 
     def close(self) -> None:
@@ -152,8 +157,29 @@ def _session_error(error: MechanicalSessionError) -> tuple[str, str]:
         return "MECHANICAL_SESSION_CONFIGURATION_REQUIRED", "configure"
     if isinstance(error, MechanicalDependencyError):
         return "MECHANICAL_DEPENDENCY_MISSING", "load_dependency"
+    if isinstance(error, MechanicalInsecureTransportOptInRequired):
+        return (
+            "MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED",
+            "acknowledge_insecure_transport",
+        )
+    if isinstance(error, MechanicalTransportConfigurationError):
+        return "MECHANICAL_TRANSPORT_CONFIGURATION_ERROR", "configure_transport"
+    if isinstance(error, MechanicalTransportPreflightError):
+        return "MECHANICAL_TRANSPORT_PREFLIGHT_FAILED", "preflight_transport"
+    if isinstance(error, MechanicalTransportCompatibilityError):
+        return "MECHANICAL_TRANSPORT_INCOMPATIBLE", "select_transport"
     if isinstance(error, MechanicalSessionStartError):
         return "MECHANICAL_SESSION_START_FAILED", "start"
     if isinstance(error, MechanicalSessionConnectError):
         return "MECHANICAL_SESSION_CONNECT_FAILED", "connect"
     return "MECHANICAL_SESSION_UNAVAILABLE", "access"
+
+
+def _with_session_context(result: ToolResult, session_context: dict[str, Any]) -> ToolResult:
+    """Add current manager diagnostics without mutating a helper result."""
+    return ToolResult(
+        success=result.success,
+        message=result.message,
+        data={**result.data, "session_context": session_context},
+        error=result.error,
+    )

@@ -17,6 +17,8 @@ MCP server entrypoint
   +-- core: errors, tool results, product-neutral SelectionSnapshot
   |
   +-- products/mechanical: PyMechanical session, inspection, selection capture
+  |     |
+  |     +-- exact-executable gRPC transport preflight and safety policy
   |
   +-- products/dpf: PyDPF result extraction
   |
@@ -72,6 +74,42 @@ policy and the manager's `close()` path is idempotent after success and retains
 the handle for a retry after failure. Configuration is immutable. Started UI
 sessions and connected sessions remain running by default; only started
 headless sessions default to force-cleanup.
+
+The Mechanical gRPC policy is separate from the MCP stdio transport. Start and
+connect remain explicit; `auto` only decides the Mechanical gRPC mode after that
+product/session choice is known. For a local start, the manager resolves the
+exact executable, derives its revision, checks PyMechanical's documented
+service-pack capability against that executable's build metadata, and then
+makes at most one `launch_mechanical()` call. Confirmed compatible Windows/Linux
+starts use WNUA/mTLS respectively. A confirmed incompatible local legacy SP
+returns a structured insecure-opt-in error with zero launch calls. The operator
+may persist an explicit local `insecure` choice; its unverified legacy listener
+binding remains visible and requires an OS-level live check. Unknown or
+conflicting evidence stops auto mode before launch. Every local start requires
+a validated exact executable, so this path cannot delegate implicitly to PyPIM.
+
+There is no exception-driven start fallback. PyMechanical reserves its port
+before the known compatibility exception and other exceptions can occur after
+process creation. A failed start is therefore latched for the MCP process; a
+second inspection returns the same structured error without another launch.
+An operator resolves the cause and restarts MCP. Successful sessions retain the
+existing reuse semantics. Connect failures can retry because connect mode does
+not create a Mechanical process.
+
+Connect mode cannot inspect the remote server's version/SP before agreeing on a
+transport. It never changes from secure to insecure automatically. Explicit
+loopback hosts use the secure platform default; other hosts default to mTLS.
+WNUA is Windows-only and restricted to PyMechanical's accepted localhost
+endpoints. Insecure non-loopback transport requires a separate explicit
+acknowledgement. Hostnames are not resolved through DNS to justify an insecure
+classification. An omitted connect host is pinned explicitly rather than
+inherited from `PYMECHANICAL_IP`.
+
+The manager exposes immutable configuration plus dynamic preflight, selected
+versus established transport/host, security, connection scope, listener-binding
+evidence, warnings, attempt count, and retry state as JSON-compatible session
+context. Inspection adds this context to its result; selection obtains it after
+any first connection so it is not stale.
 
 Mechanical tool failures retain the common structured `ToolResult` payload and
 set MCP `CallToolResult.isError=true`. The controlled scripts execute their

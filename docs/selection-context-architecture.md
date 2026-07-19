@@ -73,7 +73,8 @@ Mechanical adapter. It includes:
 
 - source, provenance, schema version, UTC capture time, capture status, and an
   explicit completeness flag;
-- configured session/ownership facts and available product/model names;
+- configured session/ownership facts, effective gRPC transport/preflight
+  diagnostics, and available product/model names;
 - native selection type, supported normalized entity type, count, entity
   entries, and native IDs;
 - positional element/face-index pairs only when Mechanical returns equally

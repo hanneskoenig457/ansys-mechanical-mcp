@@ -57,6 +57,16 @@ MCP aktualisieren
 
 Übernimm nur die für `<CHANGE_SUMMARY>` erforderlichen Änderungen am
 registrierten MCP-Server `ansys_mechanical`. Bewahre andere Codex-Einstellungen.
+Verwende dabei diese vollständig eingesetzten, änderungsspezifischen Argumente:
+
+<MCP_CONFIG_CHANGES>
+
+Unterscheide den MCP-Transport `stdio` vom Mechanical-gRPC-Argument
+`--mechanical-transport-mode`. Ein Treffer für `ansys-mechanical.exe` in
+`.venv\Scripts` ist nur der PyMechanical-CLI-Launcher und kein Nachweis der
+Mechanical-Produktinstallation. `mechanical-env` ist unter Windows nicht
+anwendbar.
+
 Wenn Prozess oder Konfiguration neu geladen werden müssen, bitte mich um einen
 Codex-Neustart und setze danach in diesem Chat fort. Behaupte vor dem Neustart
 und einem echten Tool-Aufruf keinen Liveerfolg.
@@ -70,7 +80,11 @@ Read-only Livevalidierung
 3. Rufe `inspect_mechanical_model` auf.
 4. Prüfe sichtbare GUI beziehungsweise die ausdrücklich vorbereitete
    Verbindung, tatsächliche Produktversion, strukturierte Modell-/Analysedaten,
-   Session-Kontext und alle für die Änderung relevanten Diagnosefelder.
+   Session-Kontext und alle für die Änderung relevanten Diagnosefelder. Erfasse
+   für Transportänderungen mindestens Policy, angeforderten/effektiven Modus,
+   Security, Scope, Executable-/Revisions-Preflight, erforderlichen SP,
+   Warnungen, Versuchszahl und Retry-Sperre; berichte einen erkannten SP nur,
+   wenn der exakte Build-Metadatenpfad einen ausdrücklichen SP-Marker lieferte.
 5. Rufe `inspect_mechanical_model` erneut auf und prüfe, dass keine zweite
    unnötige Mechanical-Instanz entsteht.
 6. Falls die GUI ein leeres Projekt zeigt, pausiere und bitte mich, ein
@@ -82,6 +96,15 @@ Read-only Livevalidierung
 
 8. Führe opt-in Integrationstests nur aus, wenn ihre dokumentierten
    Voraussetzungen mit der vorbereiteten Session übereinstimmen.
+
+Auto darf einen bestätigten Legacy-SP nicht unsicher starten, sondern muss ohne
+Launch ein strukturiertes Opt-in verlangen. Wenn `<MCP_CONFIG_CHANGES>` dafür
+bewusst den persistenten lokalen Modus `insecure` setzt, prüfe nach dem einen
+Startversuch mit einer rein lesenden Windows-Netzwerkabfrage, ob der tatsächliche
+Listener nur an Loopback gebunden ist. Stoppe bei einer externen Bindung. Nach
+einem Startfehler nicht wiederholt Inspect aufrufen: sichere Prozess-/GUI-Zustand
+und Payload, korrigiere nur die Konfiguration, starte Codex/MCP neu und versuche
+danach genau einmal erneut.
 
 Sicherheits- und Scope-Grenze
 ============================
