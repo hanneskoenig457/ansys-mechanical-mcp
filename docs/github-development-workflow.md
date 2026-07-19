@@ -115,6 +115,15 @@ The repository templates make the workflow reproducible on both machines even
 when GitHub Project automation is unavailable. `docs/live-validation-workflow.md`
 remains authoritative for Mechanical session and listener safety.
 
+New issues created through the thermal issue form are automatically labelled
+
+- `area:thermal`;
+- `handoff:backlog`;
+- `validation:windows-required`.
+
+Handoff labels are otherwise changed deliberately when their evidence gate is
+met. The workflow never infers `Done` from a close or merge event.
+
 ## Minimal Session Starters
 
 After the tracking PR is merged, a new Codex session should need only the issue
