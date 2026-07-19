@@ -88,6 +88,17 @@ binding remains visible and requires an OS-level live check. Unknown or
 conflicting evidence stops auto mode before launch. Every local start requires
 a validated exact executable, so this path cannot delegate implicitly to PyPIM.
 
+PyMechanical 0.12.12 has no documented legacy alternative to the newer
+`--grpc-host` binding argument. For Mechanical 2025 R1 SP03 build
+`R251RC2P03`, returned Windows evidence showed that an explicit-insecure start
+and first inspection worked, but the actual port-10000 listener was bound to
+`::` even though the selected and effective client host was `127.0.0.1`.
+Session context therefore treats those host fields as client targets rather
+than listener-binding proof. Its warnings name possible `0.0.0.0`/`::`
+bindings, unauthenticated and unencrypted exposure, and the required post-start
+OS check. The broad binding is live evidence for that build only; similar risk
+on other below-threshold releases remains a precautionary assumption.
+
 There is no exception-driven start fallback. PyMechanical reserves its port
 before the known compatibility exception and other exceptions can occur after
 process creation. A failed start is therefore latched for the MCP process; a

@@ -95,13 +95,16 @@ The usual sequence is:
    preflight, detected and required SP, warnings, attempt count, and retry
    state. Do not infer an installed SP number from the required SP; a detected
    SP is valid only when the exact build metadata contained an explicit marker.
-5. Call `inspect_mechanical_model` again and verify that no second unnecessary
-   Mechanical instance starts.
-6. If the GUI contains an empty project, stop and ask the operator to open the
+5. After a local insecure start, inspect and display the exact listener address,
+   port, and owning process. Resolve the stop-or-explicit-experimental-acceptance
+   boundary below before making another Mechanical call.
+6. Call `inspect_mechanical_model` again only after that boundary permits it,
+   and verify that no second unnecessary Mechanical instance starts.
+7. If the GUI contains an empty project, stop and ask the operator to open the
    prepared test project.
-7. Capture only the already implemented read-only selection cases. Ask the
+8. Capture only the already implemented read-only selection cases. Ask the
    operator before each manual selection change.
-8. Run opt-in integration tests only when their preconditions match the
+9. Run opt-in integration tests only when their preconditions match the
    prepared session.
 
 No live-validation handoff authorizes model mutation, mesh generation, solve,
@@ -110,11 +113,28 @@ new physics, named selections, highlighting, or target resolution.
 Auto mode never starts a confirmed legacy SP insecurely. It first returns
 `MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` with attempt count zero. After
 the operator persists explicit local `insecure`, verify the listening endpoint
-immediately with a read-only operating-system query. The client target is
-loopback, but pre-secure Mechanical releases do not accept the newer
-`--grpc-host` flag; Windows must confirm whether the actual listener is
-loopback-only. Stop if it is exposed beyond loopback. Do not firewall, kill, or
-reconfigure unrelated processes without separate authorization.
+immediately with a read-only operating-system query. Record and show the exact
+local address, port, and owning process. The client target is loopback, but
+pre-secure Mechanical releases do not accept the newer `--grpc-host` flag and
+`selected_host=127.0.0.1` does not prove the actual listener binding.
+
+The recommended default is to stop if the listener is `0.0.0.0`, `::`, or any
+other non-loopback address. If a narrowly bounded experiment is useful, explain
+in plain language that the connection is unencrypted and unauthenticated and
+may be reachable through other interfaces, then ask the operator to explicitly
+accept that displayed risk for this one read-only test session. Do not continue
+without that confirmation, and never infer it from the `insecure` configuration
+alone.
+
+After explicit confirmation, the validation may continue only with the second
+inspect, session-reuse observation, a prepared harmless test project, read-only
+SelectionSnapshot cases, and optional connect-only integration tests. It must
+use a trusted or isolated development computer, no productive or confidential
+project, and no model mutation. Do not change firewall, Registry, or system
+configuration. Display the actual listener after every new start. Close
+Mechanical deliberately through the normal operator-controlled path after the
+test, then verify again that both the Mechanical process and tested listener
+are gone.
 
 Do not retry a failed start by repeatedly calling inspection. The manager
 latches a start failure for the lifetime of the MCP process because a failure

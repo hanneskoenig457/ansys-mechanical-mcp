@@ -417,10 +417,21 @@ def test_explicit_insecure_transport_starts_confirmed_legacy_service_pack_once()
         "local_start_legacy_listener_unverified"
     )
     assert context["transport"]["listener_binding"] == "unverified_legacy_default"
+    assert context["transport"]["listener_binding_verified"] is False
+    assert context["transport"]["selected_host_is_binding_proof"] is False
     assert {warning["code"] for warning in context["transport"]["warnings"]} == {
         "MECHANICAL_TRANSPORT_INSECURE",
         "MECHANICAL_LEGACY_LISTENER_BINDING_UNVERIFIED",
     }
+    binding_warning = next(
+        warning
+        for warning in context["transport"]["warnings"]
+        if warning["code"] == "MECHANICAL_LEGACY_LISTENER_BINDING_UNVERIFIED"
+    )
+    assert "0.0.0.0 or ::" in binding_warning["message"]
+    assert "do not prove the listener binding" in binding_warning["message"]
+    assert binding_warning["details"]["possible_listener_addresses"] == ["0.0.0.0", "::"]
+    assert binding_warning["details"]["listener_binding_verified"] is False
     assert context["transport"]["fallback_attempted"] is False
     assert context["establishment"] == {
         "status": "established",
@@ -673,10 +684,30 @@ def test_explicit_insecure_unknown_preflight_uses_neutral_binding_diagnostic() -
     transport = manager.session_context["transport"]
     assert transport["connection_scope"] == "local_start_listener_binding_support_unknown"
     assert transport["listener_binding"] == "support_unknown"
+    assert transport["listener_binding_verified"] is False
+    assert transport["selected_host"] == "127.0.0.1"
+    assert transport["effective_host"] == "127.0.0.1"
+    assert transport["selected_host_is_binding_proof"] is False
     assert {warning["code"] for warning in transport["warnings"]} == {
         "MECHANICAL_TRANSPORT_INSECURE",
         "MECHANICAL_LISTENER_BINDING_SUPPORT_UNKNOWN",
     }
+    warning = next(
+        warning
+        for warning in transport["warnings"]
+        if warning["code"] == "MECHANICAL_LISTENER_BINDING_SUPPORT_UNKNOWN"
+    )
+    assert "0.0.0.0 or ::" in warning["message"]
+    assert "other network interfaces" in warning["message"]
+    assert "unencrypted and unauthenticated" in warning["message"]
+    assert "selected_host and effective_host" in warning["message"]
+    assert "do not prove the listener binding" in warning["message"]
+    assert "After every start" in warning["message"]
+    assert "trusted or isolated" in warning["message"]
+    assert warning["details"]["required_action"] == (
+        "verify_listener_address_and_owning_process_after_every_start"
+    )
+    assert json.loads(json.dumps(transport, allow_nan=False)) == transport
 
 
 def test_explicit_transport_cannot_fall_through_to_implicit_pypim_launch() -> None:

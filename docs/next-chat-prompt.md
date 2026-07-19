@@ -85,26 +85,43 @@ Read-only Livevalidierung
    Security, Scope, Executable-/Revisions-Preflight, erforderlichen SP,
    Warnungen, Versuchszahl und Retry-Sperre; berichte einen erkannten SP nur,
    wenn der exakte Build-Metadatenpfad einen ausdrücklichen SP-Marker lieferte.
-5. Rufe `inspect_mechanical_model` erneut auf und prüfe, dass keine zweite
-   unnötige Mechanical-Instanz entsteht.
-6. Falls die GUI ein leeres Projekt zeigt, pausiere und bitte mich, ein
+5. Falls ein lokaler `insecure`-Start verwendet wird, ermittle sofort mit einer
+   rein lesenden Windows-Netzwerkabfrage die exakte lokale Listener-Adresse,
+   den Port und den OwningProcess. Zeige mir diese Werte. Erkläre ausdrücklich,
+   dass `selected_host=127.0.0.1` keine Loopback-Bindung beweist und dass
+   `0.0.0.0` oder `::` potenzielle Erreichbarkeit über andere
+   Netzwerkschnittstellen bei unverschlüsselter, nicht authentifizierter
+   Kommunikation bedeutet.
+6. Bei einer Nicht-Loopback-Bindung ist Stoppen die empfohlene Vorgabe. Falls
+   `<LIVE_TEST_STEPS>` den dokumentierten experimentellen read-only Weg
+   vorsieht, frage mich stattdessen klar und laienverständlich, ob ich das
+   angezeigte Risiko ausdrücklich für genau diese eine harmlose Testsitzung auf
+   diesem vertrauenswürdigen oder isolierten Rechner akzeptiere. Fahre ohne
+   meine ausdrückliche Bestätigung nicht fort; leite die Zustimmung nicht schon
+   aus der `insecure`-Konfiguration ab.
+7. Erst nach sicherer Loopback-Feststellung oder meiner ausdrücklichen
+   Einzelsitzungs-Bestätigung: Rufe `inspect_mechanical_model` erneut auf und
+   prüfe, dass keine zweite unnötige Mechanical-Instanz entsteht.
+8. Falls die GUI ein leeres Projekt zeigt, pausiere und bitte mich, ein
    ungefährliches vorbereitetes Testprojekt zu öffnen. Öffne oder verändere
    kein produktives Projekt selbstständig.
-7. Führe danach die folgenden änderungsspezifischen read-only Prüfungen aus:
+9. Führe danach die folgenden änderungsspezifischen read-only Prüfungen aus:
 
    <LIVE_TEST_STEPS>
 
-8. Führe opt-in Integrationstests nur aus, wenn ihre dokumentierten
+10. Führe opt-in Integrationstests nur aus, wenn ihre dokumentierten
    Voraussetzungen mit der vorbereiteten Session übereinstimmen.
+11. Schließe Mechanical nach dem Test kontrolliert über den normalen
+    Betreiberweg und prüfe erneut, dass Prozess und getesteter Listener nicht
+    mehr vorhanden sind.
 
 Auto darf einen bestätigten Legacy-SP nicht unsicher starten, sondern muss ohne
 Launch ein strukturiertes Opt-in verlangen. Wenn `<MCP_CONFIG_CHANGES>` dafür
-bewusst den persistenten lokalen Modus `insecure` setzt, prüfe nach dem einen
-Startversuch mit einer rein lesenden Windows-Netzwerkabfrage, ob der tatsächliche
-Listener nur an Loopback gebunden ist. Stoppe bei einer externen Bindung. Nach
-einem Startfehler nicht wiederholt Inspect aufrufen: sichere Prozess-/GUI-Zustand
-und Payload, korrigiere nur die Konfiguration, starte Codex/MCP neu und versuche
-danach genau einmal erneut.
+bewusst den persistenten lokalen Modus `insecure` setzt, ist das noch keine
+Zustimmung zu einer beobachteten externen Listener-Bindung; dafür gilt der
+ausdrückliche Einzelsitzungs-Dialog oben. Nach einem Startfehler nicht wiederholt
+Inspect aufrufen: sichere Prozess-/GUI-Zustand und Payload, korrigiere nur die
+Konfiguration, starte Codex/MCP neu und versuche danach genau einmal erneut.
 
 Sicherheits- und Scope-Grenze
 ============================
@@ -113,6 +130,12 @@ Keine Modellmutation. Nicht implementieren oder ausführen: Named Selections,
 Highlighting, Target Resolution, Lasten, Lagerungen, Kontakte, Materialien,
 Mesh-Aktionen, Solve-/DPF-Erweiterungen, build123d/OCP, Viewer oder neue
 physikalische Funktionen.
+
+Der experimentelle Risikoweg erlaubt ausschließlich ein leeres oder harmloses
+Testprojekt auf einem vertrauenswürdigen oder isolierten Entwicklungsrechner.
+Keine produktiven oder vertraulichen Modelle, keine Firewall-, Registry- oder
+Systemänderung und keine stillschweigende Risikoannahme für einen späteren
+Start.
 
 Wenn die echte Laufzeit eine Annahme widerlegt, sichere Version, Build/SP,
 PyMechanical-Version, Konfiguration, vollständige Fehlermeldung, Prozess-/GUI-

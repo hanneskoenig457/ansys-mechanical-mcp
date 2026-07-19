@@ -334,17 +334,21 @@ class MechanicalSessionManager:
                         if confirmed_legacy
                         else "MECHANICAL_LISTENER_BINDING_SUPPORT_UNKNOWN"
                     ),
-                    "message": (
-                        "This confirmed legacy service pack does not support the host-binding "
-                        "argument. Verify the actual insecure listener with an operating-system "
-                        "query."
-                        if confirmed_legacy
-                        else (
-                            "Host-binding support could not be determined for this Mechanical "
-                            "executable. Verify the actual insecure listener with an "
-                            "operating-system query."
-                        )
+                    "message": _listener_binding_warning_message(
+                        confirmed_legacy=confirmed_legacy
                     ),
+                    "details": {
+                        "possible_listener_addresses": ["0.0.0.0", "::"],
+                        "listener_binding_verified": False,
+                        "selected_host_is_binding_proof": False,
+                        "risk": "potential_non_loopback_exposure",
+                        "required_action": (
+                            "verify_listener_address_and_owning_process_after_every_start"
+                        ),
+                        "intended_use": (
+                            "explicit_experimental_opt_in_on_trusted_or_isolated_host_only"
+                        ),
+                    },
                 }
             )
         transport.update(
@@ -370,6 +374,14 @@ class MechanicalSessionManager:
                     else "remote"
                     if self._selected_host is not None
                     else "not_selected"
+                ),
+                "listener_binding_verified": (
+                    False
+                    if self.config.mode == "start" and self._selected_host is not None
+                    else None
+                ),
+                "selected_host_is_binding_proof": (
+                    False if self.config.mode == "start" else None
                 ),
                 "selection_reason": self._transport_selection_reason,
                 "automatic": self.config.transport_mode == "auto",
@@ -725,4 +737,26 @@ def _is_secure_transport_compatibility_error(error: Exception) -> bool:
         message.startswith("Mechanical version ")
         and "does not support secure transport modes." in message
         and "secure gRPC support" in message
+    )
+
+
+def _listener_binding_warning_message(*, confirmed_legacy: bool) -> str:
+    """Explain why a local client target is not listener-binding evidence."""
+    evidence = (
+        "This confirmed legacy service pack does not support PyMechanical's newer "
+        "--grpc-host binding argument."
+        if confirmed_legacy
+        else (
+            "Host-binding support could not be determined for this Mechanical executable."
+        )
+    )
+    return (
+        f"{evidence} The actual insecure Mechanical listener can bind to 0.0.0.0 or :: "
+        "instead of loopback, which means that it may be reachable through other network "
+        "interfaces. The connection is unencrypted and unauthenticated. The selected_host "
+        "and effective_host fields (normally 127.0.0.1 for this local start) record the "
+        "client target and do not prove the listener binding. After every start, verify the "
+        "exact listener address and owning process with an operating-system query. Use this "
+        "mode only as an explicit experimental opt-in on a trusted or isolated computer "
+        "after accepting the risk for that one session."
     )

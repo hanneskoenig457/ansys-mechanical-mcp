@@ -145,6 +145,34 @@ def test_discover_start_transport_does_not_treat_unparseable_build_as_old_sp(
     assert grpc_calls == []
 
 
+def test_real_r251rc2p03_build_lines_remain_unknown_without_explicit_sp_marker(
+    tmp_path: Path,
+) -> None:
+    executable = _windows_mechanical_executable(tmp_path, 251)
+    builddate = tmp_path / "v251" / "builddate.txt"
+    builddate.write_text(
+        "Unified Package Created: 202412031843P03\n"
+        "Unified Package Name: R251RC2P03\n",
+        encoding="utf-8",
+    )
+    grpc_calls = []
+
+    result = discover_start_transport(
+        system_name="Windows",
+        executable_lookup=lambda _requested_revision: str(executable),
+        version_lookup=lambda product, path: 251,
+        grpc_support_lookup=lambda revision: grpc_calls.append(revision) or False,
+    )
+
+    assert result.status == "unknown"
+    assert result.detected_revision == 251
+    assert result.required_secure_service_pack == "SP04"
+    assert result.detected_service_pack is None
+    assert result.source == "exact_executable_builddate"
+    assert grpc_calls == []
+    assert json.loads(json.dumps(result.to_dict(), allow_nan=False)) == result.to_dict()
+
+
 def test_discover_start_transport_stops_when_exact_path_and_helper_disagree(
     tmp_path: Path,
 ) -> None:

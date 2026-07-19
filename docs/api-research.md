@@ -32,6 +32,62 @@ Track official sources and verified API decisions here.
 
 ## Decisions
 
+### Mechanical 2025 R1 SP03 listener-binding research (2026-07-19)
+
+The investigation was deliberately limited to official PyMechanical
+documentation and the tagged PyMechanical 0.12.12 implementation used by the
+Windows validation machine.
+
+- The official transport matrix makes SP04 the secure-gRPC threshold for
+  Mechanical 2025 R1 revision 251. Below that threshold, PyMechanical documents
+  only insecure transport; it does not document a separate legacy loopback
+  binding option.
+  Source:
+  https://mechanical.docs.pyansys.com/version/stable/user_guide/remote_session/grpc_security.html
+- `MechanicalLauncher` accepts a `host`, but its 0.12.12 argument builder adds
+  `--grpc-host`, `--transport-mode`, and `--certs-dir` only when
+  `has_grpc_service_pack()` succeeds. For 251 SP03 it launches with the legacy
+  `-grpc <port>` form and does not forward `host="127.0.0.1"` to the product.
+  Passing the host from this MCP adapter more carefully therefore cannot bind
+  the SP03 listener.
+  Source:
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/launcher.py#L195-L229
+- The `ansys-mechanical` CLI applies the same service-pack gate before adding
+  `--grpc-host`; direct CLI launch is not a distinct SP03 binding path.
+  Source:
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/run.py#L240-L260
+- `launch_mechanical(..., start_instance=True)` reaches that same launcher.
+  `launch_mechanical(..., start_instance=False)` and
+  `connect_to_mechanical(...)` choose the client endpoint of an already-running
+  server and cannot retroactively change its listener binding.
+  Source:
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/mechanical.py#L2439-L2552
+- PyMechanical exposes a small `create_ip_file()` helper for `mylocal.ip`, but
+  0.12.12 calls it only in the connect-to-existing branch, after constructing
+  the client, and neither the launcher nor CLI uses it as a pre-launch binding
+  mechanism. The API documentation gives no 251-SP03 placement, startup, or
+  loopback guarantee. It is therefore not a documented, reliable solution for
+  this safety boundary.
+  Sources:
+  https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/mechanical/index.html
+  and
+  https://github.com/ansys/pymechanical/blob/v0.12.12/src/ansys/mechanical/core/mechanical.py#L250-L254
+
+Decision: no simple, documented, version-compatible project-side method was
+found to bind the Mechanical 2025 R1 SP03 insecure listener exclusively to
+`127.0.0.1` or `::1`. Do not add an undocumented argument, `mylocal.ip` setup,
+firewall/Registry automation, or a second launch path. Retain fail-closed
+`auto`, no secure-to-insecure fallback, exactly one launch attempt, and the
+explicit `insecure` opt-in. Treat `selected_host` and `effective_host` as client
+targets, not listener-binding evidence. Require an OS-level listener and owning
+process check after every insecure start.
+
+The normal rule remains to stop on a non-loopback listener. For a single,
+harmless read-only validation session only, the operator may explicitly accept
+the displayed listener risk on a trusted or isolated development computer.
+That acceptance is per start and does not authorize model mutation, productive
+or confidential projects, firewall/Registry changes, or silent reuse.
+
 - PyMechanical launch/connect: use `ansys.mechanical.core.launch_mechanical()`
   to launch and `ansys.mechanical.core.Mechanical(...)` or
   `connect_to_mechanical(...)` to connect to an existing Mechanical server.
@@ -252,15 +308,34 @@ against the exact locally supported Mechanical versions.
 
 ## Implemented and Validated Boundary
 
-### Returned Windows evidence before this change
+### Returned Windows evidence processed by this change
 
 The licensed validation machine reported PyMechanical 0.12.12 with Mechanical
-2025 R1 revision 251, SP03, build `R251RC2P03`. A configured local UI start on
-port 10000 failed before the GUI with `MECHANICAL_SESSION_START_FAILED` and
-PyMechanical's message that revision 251 requires SP04+ for secure transport.
-This is external live evidence supplied to the Mac development cycle, not a
-round trip performed on this Mac. The new transport preflight and explicit
-legacy opt-in path still require fresh Windows validation.
+2025 R1 revision 251, installed SP03, build `R251RC2P03`. After the earlier
+secure-mode refusal, an explicitly configured local `insecure` UI start on port
+10000 succeeded with exactly one GUI and one launch attempt. The first real
+`inspect_mechanical_model` call returned `success=true`, product version 2025
+R1, and an empty analysis list.
+
+The structured preflight correctly remained `status="unknown"` and
+`detected_service_pack=null`: the first two exact `builddate.txt` lines contained
+`202412031843P03` and `R251RC2P03`, but no explicit `SP03` marker. Installed
+SP03 was separately known from the validated installation and must not be
+manufactured from those `P03` strings.
+
+After startup, Windows reported `AnsysWBU.exe` PID 12172 listening on port 10000
+at local address `::`. Thus `selected_host=127.0.0.1` and
+`effective_host=127.0.0.1` did not prove a loopback-only listener. `::` is a
+binding to all IPv6 interfaces rather than only `::1`; actual external access
+also depends on the firewall and network. Validation stopped before the second
+inspect, session-reuse check, selection cases, and opt-in integration tests.
+The operator closed Mechanical through its GUI and then confirmed zero
+AnsysWBU processes and zero listeners on port 10000.
+
+This is returned external Windows evidence, not a live round trip performed on
+the Mac. The broad binding is proven only for the stated 2025 R1 SP03 build and
+machine. A comparable risk on other releases below their secure threshold is a
+precautionary assumption, not a blanket live-tested fact.
 
 Implemented in this repository:
 
@@ -308,8 +383,9 @@ Not validated against a real Mechanical runtime:
 - GUI selection capture for local and remote connected sessions;
 - native proxy type text used for face/edge/vertex/body normalization;
 - real license, transport, shutdown, and UI-thread failure behavior;
-- exact Windows `builddate.txt` content, 251 SP03 explicit-insecure launch,
-  legacy listener binding, WNUA/mTLS handshakes, and post-launch process behavior;
+- second-inspect/session reuse and selection behavior after the observed 251
+  SP03 explicit-insecure start;
+- WNUA/mTLS handshakes and listener binding for other Mechanical builds;
 - any model/document/revision identifier beyond the nullable fields currently
   returned by the conservative script.
 

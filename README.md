@@ -13,7 +13,8 @@ or supported by Ansys.
 
 ## Status
 
-Early public alpha. The public MCP surface currently contains three structured
+Early experimental public alpha, not a production-ready business product. The
+public MCP surface currently contains three structured
 tools:
 
 - `check_environment`, which runs without Ansys installed;
@@ -23,11 +24,14 @@ tools:
   active-tree context from an explicitly GUI-capable session.
 
 The session lifecycle, model inspection, and selection path are unit-tested
-with injected fakes, including an in-process MCP client/server round trip. They
-have not yet been validated end-to-end against a licensed Mechanical
-installation. Internal, fake-tested helpers for a controlled script fallback,
-an existing Static Structural solve, and PyDPF result metadata remain
-unexposed. The project does not simulate solver behavior.
+with injected fakes, including an in-process MCP client/server round trip. A
+licensed Windows check has confirmed one explicit-insecure 2025 R1 SP03 GUI
+start and first model inspection. That check also found a non-loopback listener
+and therefore stopped before session reuse and selection validation. These
+remaining paths are not yet validated end-to-end against Mechanical. Internal,
+fake-tested helpers for a controlled script fallback, an existing Static
+Structural solve, and PyDPF result metadata remain unexposed. The project does
+not simulate solver behavior.
 
 Mechanical access is opt-in: omitting `--mechanical-mode` leaves the server
 unconfigured, and either Mechanical tool returns a structured configuration
@@ -153,6 +157,45 @@ Mechanical gRPC transport defaults to `--mechanical-transport-mode auto`:
   `--mechanical-transport-mode insecure` and
   `--mechanical-allow-insecure-remote`. Its session context carries an explicit
   warning.
+
+## Mechanical gRPC Support And Legacy Listener Risk
+
+The `host` selected by the Python client is not proof of the address on which
+Mechanical actually listens. This distinction matters for insecure releases:
+
+| Mechanical release | Current project position |
+| --- | --- |
+| 2025 R1 revision 251 SP04+ | SP04 is PyMechanical's documented threshold for secure gRPC. This is the preferred path, but its WNUA behavior still needs a separate live check in this project. |
+| 2025 R1 SP03, build `R251RC2P03` | Explicit `insecure` started one GUI and the first real inspect succeeded on the Windows validation machine. Windows then reported port 10000 bound to `::`, so the validation stopped. Treat this path as experimental and never use it for productive or confidential models. |
+| Older or other releases below their documented secure threshold | A comparable broad-listener risk is possible, but has not been live-proven for every release. Keep `auto` fail-closed and require explicit `insecure` opt-in. |
+
+PyMechanical 0.12.12 offers no documented, version-compatible SP03 start option
+that reliably binds this listener to `127.0.0.1` or `::1`. Its newer
+`--grpc-host` mechanism is not passed to Mechanical 2025 R1 below SP04. Direct
+PyMechanical CLI launch follows the same rule, while connect mode only chooses
+the client destination of a server whose binding already exists.
+
+The normal validation rule is therefore to inspect the exact listener address
+and owning process after every insecure start and stop when it is not
+loopback-only. A narrowly bounded experimental read-only session may continue
+only after the operator is shown that exact evidence and explicitly accepts the
+risk for that one session. Use only an empty or harmless test project on a
+trusted or isolated development computer; do not mutate the model, change the
+firewall or Registry, or silently carry consent into another start. Close
+Mechanical deliberately afterward and verify that both process and listener
+are gone.
+
+Terms used here:
+
+- **Loopback:** reachable only inside the same computer, normally `127.0.0.1`
+  or `::1`.
+- **Listener:** the network endpoint on which Mechanical waits for connections.
+- **Unauthenticated:** the client identity is not reliably verified.
+- **Unencrypted:** network traffic is not encrypted.
+- **`::`:** all IPv6 network interfaces, not only IPv6 loopback `::1`; actual
+  external reachability also depends on firewall and network configuration.
+- **Opt-in:** deliberate, explicit activation by the operator.
+- **Fail-closed:** stop by default when the security state is unknown.
 
 Use `--mechanical-exec-file` when path discovery does not select the desired
 local installation; a mismatch between the requested revision and resolved

@@ -198,13 +198,13 @@ async def test_inspection_mcp_roundtrip_reuses_session_and_cleans_up_once() -> N
         MechanicalSessionConfig(mode="start", transport_mode="insecure"),
         launch_mechanical=launch_mechanical,
         transport_preflight=lambda _exec_file, _requested_revision: MechanicalTransportPreflight(
-            status="unsupported",
+            status="unknown",
             executable_path=r"C:\Ansys\v251\AnsysWBU.exe",
             exact_executable_validated=True,
             detected_revision=251,
-            secure_transport_supported=False,
             required_secure_service_pack="SP04",
             source="unit_test",
+            message="build metadata has no explicit SP marker",
         ),
         system_name="Windows",
     )
@@ -225,8 +225,20 @@ async def test_inspection_mcp_roundtrip_reuses_session_and_cleans_up_once() -> N
         session_context = first.structuredContent["data"]["session_context"]
         assert session_context["transport"]["effective_mode"] == "insecure"
         assert session_context["transport"]["fallback_attempted"] is False
+        assert session_context["transport"]["listener_binding"] == "support_unknown"
+        assert session_context["transport"]["listener_binding_verified"] is False
+        binding_warning = next(
+            warning
+            for warning in session_context["transport"]["warnings"]
+            if warning["code"] == "MECHANICAL_LISTENER_BINDING_SUPPORT_UNKNOWN"
+        )
+        assert "0.0.0.0 or ::" in binding_warning["message"]
+        assert binding_warning["details"]["selected_host_is_binding_proof"] is False
         assert session_context["establishment"]["attempt_count"] == 1
         assert second.structuredContent == first.structuredContent
+        assert json.loads(json.dumps(first.structuredContent, allow_nan=False)) == (
+            first.structuredContent
+        )
         assert len(launch_calls) == 1
         assert launch_calls[0]["transport_mode"] == "insecure"
         assert "port" not in launch_calls[0]

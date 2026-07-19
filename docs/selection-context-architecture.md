@@ -3,8 +3,11 @@
 Status: accepted architecture direction for the Mechanical prototype.
 The deterministic read-only snapshot and `capture_current_selection` MCP tool
 are implemented and fake-tested. Runtime validation against a licensed,
-interactive Mechanical installation is still pending. Semantic explanation,
-resolution, highlighting, and mutation remain unimplemented.
+interactive Mechanical installation is still pending. A first real model
+inspection succeeded on Mechanical 2025 R1 SP03, but validation stopped after
+Windows observed its insecure listener bound to `::`; no SelectionSnapshot case
+was run. Semantic explanation, resolution, highlighting, and mutation remain
+unimplemented.
 
 ## Decision
 
