@@ -147,6 +147,15 @@ Run checks:
 
 The basic unit tests are independent from licensed Ansys installations.
 
+Project development and licensed validation normally happen on separate
+machines. Code changes, fake tests, commits, and pushes are made on the macOS
+development machine without Ansys. The licensed Windows Mechanical machine
+pulls an exact commit and performs the opt-in read-only round trip. Results from
+these two environments are always reported separately. See the
+[live-validation workflow](docs/live-validation-workflow.md), the reusable
+[development prompt](docs/development-chat-prompt.md), and the reusable
+[validation handoff prompt](docs/next-chat-prompt.md).
+
 Real read-only integration tests are opt-in. With an explicitly prepared
 Mechanical gRPC session, set connection variables and run:
 

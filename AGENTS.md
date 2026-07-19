@@ -67,6 +67,38 @@ Prefer these commands:
 .venv/bin/python -m ansys_mechanical_mcp.server --check-environment
 ```
 
+## Two-Machine Development And Validation
+
+The normal project workflow deliberately separates implementation from licensed
+Mechanical validation:
+
+- The **development machine** is a Mac without a licensed Ansys Mechanical
+  installation. It is the normal source-code workspace. Implement changes
+  there, run unit, fake, CLI, and in-process MCP tests, update documentation,
+  then commit and push the tested change.
+- The **Mechanical validation machine** is Windows with the licensed interactive
+  Mechanical installation. Pull the exact reviewed commit there, update only
+  the repository virtual environment and MCP registration as needed, restart
+  the MCP client, and perform the opt-in read-only live checks against a
+  harmless test project.
+
+At the start of a machine-specific task, verify the operating system and stated
+role. Do not run Windows/Mechanical validation instructions on the Mac, and do
+not silently turn the Windows validation checkout into the primary development
+workspace.
+
+Never present fake or in-process MCP coverage from the development machine as a
+real Mechanical round trip. Conversely, do not make ad hoc source changes on
+the validation machine during the normal workflow. When live behavior disproves
+an assumption, capture the exact version, configuration, error, and safe
+structured payload, then return that evidence to the development machine for
+the next regression-tested change. An explicitly requested emergency or
+diagnostic branch on the validation machine is an exception, not the default.
+
+See `docs/live-validation-workflow.md` for the handoff procedure and
+`docs/development-chat-prompt.md` and `docs/next-chat-prompt.md` for the reusable
+development and validation prompts.
+
 ## Architecture Direction
 
 Use the modular layout:

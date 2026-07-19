@@ -1,95 +1,123 @@
-# Prompt For The Next Development Chat
+# Mechanical Validation Handoff Prompt
 
-Copy the text below into a new coding chat when a licensed Mechanical 2026 R1
-GUI session is available.
+This is a reusable template for the licensed Mechanical validation machine.
+The development chat must replace every angle-bracket placeholder before
+handing it off. Do not assume a Mechanical release that has not been observed.
 
 ```text
-Arbeite im lokalen Root-Verzeichnis deines Checkouts von
-`ansys-mechanical-mcp` (ersetze `<REPOSITORY_ROOT>` durch diesen Pfad):
+Arbeite im lokalen Windows-Checkout von `ansys-mechanical-mcp` auf dem Rechner
+mit der lizenzierten interaktiven Mechanical-Installation.
 
-<REPOSITORY_ROOT>
+Zu validierende Revision:
 
-Ziel dieses Arbeitsgangs ist genau ein technischer Schritt: Validiere den
-bereits implementierten persistenten MCP-/Mechanical-Lifecycle und den
-read-only SelectionSnapshot gegen eine echte lizenzierte, interaktive
-Mechanical-2026-R1-Session. Implementiere keine Mutation und erweitere den
-fachlichen Scope nicht.
+- Remote: <REMOTE>
+- Branch: <BRANCH>
+- Commit: <COMMIT>
+- Zweck der Änderung: <CHANGE_SUMMARY>
 
-Lies zuerst vollständig AGENTS.md, README.md, pyproject.toml, CHANGELOG.md,
-docs/api-research.md, docs/architecture.md,
-docs/selection-context-architecture.md, docs/v0.1-implementation-plan.md, alle
-Mechanical-Quellen unter src/ und die zugehörigen Tests. Prüfe anschließend
-git status und git diff. Bewahre vorhandene Änderungen; kein Reset, Commit oder
-Push ohne ausdrückliche Aufforderung.
+Umgebungsgrenze
+===============
 
-Verifiziere live den erwarteten Ausgangspunkt:
+Die Implementierung, Fake-Tests und der Push wurden auf einem separaten
+macOS-Entwicklungsrechner ohne Ansys durchgeführt. Dieser Prompt ist dagegen
+für den Windows-Rechner mit der lizenzierten Mechanical-Installation bestimmt.
 
-- Öffentliche MCP-Tools: check_environment, inspect_mechanical_model und
-  capture_current_selection.
-- FastMCP v1 stdio-Lifespan mit genau einem lazy MechanicalSessionManager.
-- Explizite Start-/Connect-, GUI-/Batch-, Ownership- und Cleanup-Konfiguration.
-- SelectionSnapshot v1.0 mit Capture-/Vollständigkeitsstatus, 1.000er
-  Rückgabelimit sowie capability-geprüfter CurrentSelection-, Entities-,
-  ElementFaceIndices- und Tree.ActiveObjects-Erfassung.
-- Unit- und In-Process-MCP-Tests funktionieren ohne Ansys.
-- Die realen Integrationstests sind opt-in und bisher nicht erfolgreich gegen
-  echtes Mechanical validiert.
+Prüfe vor jeder anderen Aktion das Betriebssystem. Fahre nur fort, wenn es
+Windows ist und dieser Checkout ausdrücklich als Mechanical-Validierungsrechner
+verwendet wird. Stoppe bei macOS/Darwin und verwende dort stattdessen
+`docs/development-chat-prompt.md`. Windows allein beweist noch keine verfügbare
+Lizenz oder vorbereitete Testsession; prüfe diese Voraussetzungen separat.
 
-Nutze ausschließlich .venv. Richte eine echte Testsession entweder so ein:
+Behandle die vom Mac übernommenen Fake- und Unit-Testergebnisse nicht als echten
+Mechanical-Nachweis. Dieser Rechner dient der lizenzierten read-only
+Integration.
 
-1. bevorzugt connect zu einem vom Benutzer vorbereiteten Mechanical-gRPC-Server
-   mit GUI und cleanup_on_exit=false; oder
-2. start mit batch=False und einem ausdrücklich für den Test verwendeten leeren
-   Projekt.
+Lies zuerst vollständig AGENTS.md, README.md,
+docs/live-validation-workflow.md, docs/api-research.md,
+docs/architecture.md, docs/selection-context-architecture.md und die für die
+Änderung relevanten Quellen und Tests.
 
-Hänge dich nicht an eine beliebige normale Workbench-/Mechanical-Sitzung, wenn
-kein offiziell unterstützter gRPC-Server läuft. Verändere kein Nutzerprojekt.
+Checkout aktualisieren
+======================
 
-Führe zuerst den bestehenden read-only Modellinspektions-Roundtrip aus. Prüfe
-Session-Wiederverwendung und Cleanup/Ownership ohne eine nutzereigene verbundene
-Instanz zu beenden.
+1. Prüfe `git status`, den aktuellen Branch und lokale Änderungen.
+2. Bewahre fremde Änderungen; kein Reset, kein Force-Push und kein
+   Überschreiben lokaler Arbeit.
+3. Fetche den angegebenen Remote.
+4. Aktualisiere den angegebenen Branch ausschließlich per Fast-Forward, sofern
+   der lokale Zustand das sicher erlaubt.
+5. Prüfe, dass `HEAD` exakt `<COMMIT>` entspricht. Fahre andernfalls nicht mit
+   der Livevalidierung fort.
+6. Verwende ausschließlich die Repository-`.venv` und installiere oder
+   aktualisiere den ausgecheckten Projektstand samt benötigten Development- und
+   Ansys-Abhängigkeiten darin.
 
-Validiere danach CurrentSelection mit expliziten, kurzen Captures für:
+MCP aktualisieren
+=================
 
-- keine Auswahl;
-- eine Geometriefläche;
-- mehrere gleichartige Geometrieentitäten;
-- mindestens eine Knoten- und eine Elementauswahl, sofern im vorbereiteten
-  Modell vorhanden;
-- eine Elementflächenauswahl, sofern sicher herstellbar;
-- ein oder mehrere aktive Tree-Objekte;
-- allgemeines ISelectionInfo versus verfügbare reichere
-  IMechanicalSelectionInfo-Capabilities.
+Übernimm nur die für `<CHANGE_SUMMARY>` erforderlichen Änderungen am
+registrierten MCP-Server `ansys_mechanical`. Bewahre andere Codex-Einstellungen.
+Wenn Prozess oder Konfiguration neu geladen werden müssen, bitte mich um einen
+Codex-Neustart und setze danach in diesem Chat fort. Behaupte vor dem Neustart
+und einem echten Tool-Aufruf keinen Liveerfolg.
 
-Dokumentiere für jeden real beobachteten Fall:
+Read-only Livevalidierung
+========================
 
-- exakten nativen SelectionType-Text;
-- tatsächliche Befüllung und Längen von Ids, Entities und ElementFaceIndices;
-- den nativen Typtext der Entities;
-- Tree.ActiveObjects-Felder;
-- Produkt-/Projekt-/Modellfelder;
-- JSON-Kompatibilität;
-- Mechanical-Version, Start-/Connect-Modus und GUI-Konfiguration;
-- ob der Fall erfolgreich, nicht verfügbar oder versionsabhängig war.
+1. Prüfe, dass `check_environment`, `inspect_mechanical_model` und
+   `capture_current_selection` verfügbar sind.
+2. Rufe zuerst `check_environment` auf und sichere den strukturierten Befund.
+3. Rufe `inspect_mechanical_model` auf.
+4. Prüfe sichtbare GUI beziehungsweise die ausdrücklich vorbereitete
+   Verbindung, tatsächliche Produktversion, strukturierte Modell-/Analysedaten,
+   Session-Kontext und alle für die Änderung relevanten Diagnosefelder.
+5. Rufe `inspect_mechanical_model` erneut auf und prüfe, dass keine zweite
+   unnötige Mechanical-Instanz entsteht.
+6. Falls die GUI ein leeres Projekt zeigt, pausiere und bitte mich, ein
+   ungefährliches vorbereitetes Testprojekt zu öffnen. Öffne oder verändere
+   kein produktives Projekt selbstständig.
+7. Führe danach die folgenden änderungsspezifischen read-only Prüfungen aus:
 
-Wenn eine aktuelle Codeannahme durch die echte Laufzeit widerlegt wird, ändere
-nur den kleinsten Adapter-/Normalisierungsbereich und ergänze einen
-entsprechenden Regressionstest mit Fake-Payload. Erfinde keine Revision-Hashes,
-Geometriedeskriptoren oder Semantik.
+   <LIVE_TEST_STEPS>
 
-Nicht implementieren: Named Selections, Highlighting, Target Resolution,
-LLM-Erklärung, Lasten, Lagerungen, Kontakte, Materialien, Mesh Controls, Solve-
-oder DPF-Erweiterungen, build123d/OCP, Viewer, CAD-/Preprocessing-Funktionen oder
-eine Entscheidung zum ersten physikalischen Phänomen.
+8. Führe opt-in Integrationstests nur aus, wenn ihre dokumentierten
+   Voraussetzungen mit der vorbereiteten Session übereinstimmen.
 
-Führe abschließend mindestens aus:
+Sicherheits- und Scope-Grenze
+============================
 
-.venv/bin/python -m pytest
-.venv/bin/ruff check .
-.venv/bin/python -m ansys_mechanical_mcp.server --check-environment
+Keine Modellmutation. Nicht implementieren oder ausführen: Named Selections,
+Highlighting, Target Resolution, Lasten, Lagerungen, Kontakte, Materialien,
+Mesh-Aktionen, Solve-/DPF-Erweiterungen, build123d/OCP, Viewer oder neue
+physikalische Funktionen.
+
+Wenn die echte Laufzeit eine Annahme widerlegt, sichere Version, Build/SP,
+PyMechanical-Version, Konfiguration, vollständige Fehlermeldung, Prozess-/GUI-
+Verhalten und sichere strukturierte Payloads. Ändere im normalen Ablauf keinen
+Projektcode auf diesem Rechner. Gib die Evidenz für einen fake-getesteten Fix
+an den Entwicklungsrechner zurück.
+
+Abschluss
+=========
+
+Führe mindestens aus:
+
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\python.exe -m ansys_mechanical_mcp.server --check-environment
 git diff --check
 
-Berichte getrennt, was mit Fakes, im MCP-Roundtrip und gegen echtes Mechanical
-validiert wurde. Aktualisiere docs/api-research.md und Statusdokumente nur mit
-tatsächlich beobachteten Ergebnissen. Kein Commit oder Push.
+Berichte getrennt:
+
+- Installation und MCP-Verbindung;
+- vom Entwicklungsrechner übernommene Fake-/Unit-Validierung;
+- echter Mechanical-Roundtrip;
+- reale Selection- oder andere read-only Fälle;
+- nicht verfügbare oder versionsabhängige Fälle;
+- verbleibende technische Grenzen;
+- genaue Rückgabe-Evidenz für den Entwicklungsrechner;
+- den sinnvollsten nächsten Schritt.
+
+Kein Commit und kein Push auf dem Mechanical-Rechner, sofern ich dies nach
+einem live beobachteten Problem nicht ausdrücklich beauftrage.
 ```
