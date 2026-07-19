@@ -193,3 +193,9 @@ Every development-to-validation handoff should identify:
 Use `docs/development-chat-prompt.md` to begin work on the Mac and
 `docs/next-chat-prompt.md` for the subsequent Windows validation handoff.
 Replace their placeholders with the actual revision and change-specific steps.
+
+For tracked work, the corresponding GitHub issue is the durable handoff record.
+Post the exact commit and development evidence before Windows starts, then post
+the live result and cleanup evidence back to the same issue. Follow
+`docs/github-development-workflow.md`; copied chat prompts are helpers, not the
+source of truth.

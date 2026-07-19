@@ -99,6 +99,15 @@ See `docs/live-validation-workflow.md` for the handoff procedure and
 `docs/development-chat-prompt.md` and `docs/next-chat-prompt.md` for the reusable
 development and validation prompts.
 
+GitHub issues are the durable work orders and evidence records for cross-machine
+work. Use `docs/github-development-workflow.md` for issue, branch, pull-request,
+status, and handoff-comment contracts. A chat prompt may initiate a task but
+must not be the only record of its scope or validation evidence.
+
+When a task names a GitHub issue, read its current body, dependency links, and
+handoff comments after synchronizing the checkout. Do not require the operator
+to paste a second long prompt when the issue already contains the contract.
+
 ## Architecture Direction
 
 Use the modular layout:
@@ -141,8 +150,10 @@ installation.
   before mutation.
 - Treat a build123d/OpenCascade viewer and a build123d-based CAD preprocessor as
   two distinct optional future roles, neither of which is an MVP dependency.
-- Do not choose or imply the first supported physical phenomenon until that
-  scope is decided explicitly.
+- Steady-state thermal analysis has now been selected explicitly as the next
+  staged workflow, but no thermal capability is implemented yet. Follow
+  `docs/steady-state-thermal-workflow.md` and its ordered GitHub issues; do not
+  skip a Windows validation gate or imply later stages are already supported.
 
 See `docs/selection-context-architecture.md` for the full decision and safety
 boundary.

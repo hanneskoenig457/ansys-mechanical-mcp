@@ -14,3 +14,8 @@ htmlcov/
 ansys_work/
 *.wbpj.lock
 
+# Local Mechanical validation inputs and generated outputs. Real CAD, projects,
+# solver databases, and exported evidence must never be committed from here.
+local-validation/inputs/
+local-validation/outputs/
+

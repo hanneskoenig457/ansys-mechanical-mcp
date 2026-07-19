@@ -1,0 +1,72 @@
+name: Steady-state thermal stage
+description: Define one reviewable Mac-development and Windows-validation stage.
+title: "[Thermal Stage] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach confidential CAD, Mechanical databases, or solver outputs.
+        Keep fake-test evidence separate from licensed Windows evidence.
+  - type: input
+    id: parent
+    attributes:
+      label: Parent roadmap issue
+      placeholder: "#123"
+    validations:
+      required: true
+  - type: input
+    id: dependency
+    attributes:
+      label: Predecessor dependency
+      description: Use "none" only for the first ordered stage.
+      placeholder: "#122 or none"
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and engineering boundary
+      description: State the deliverable, modelling assumptions, and why this slice is useful.
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Explicit non-goals
+      description: List later stages and any mutation that is not authorized here.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: MCP and safety contract
+      description: Include preview/confirm/apply/inspect behavior, units, target re-resolution, and fail-closed cases.
+    validations:
+      required: true
+  - type: textarea
+    id: mac_gate
+    attributes:
+      label: macOS development gate
+      description: Required implementation, fake/unit/in-process MCP tests, documentation, branch, and exact commit evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: windows_gate
+    attributes:
+      label: Windows Mechanical gate
+      description: Harmless project/input prerequisites, exact tool order, live evidence, cleanup, and prohibited actions.
+    validations:
+      required: true
+  - type: checkboxes
+    id: completion
+    attributes:
+      label: Completion requirements
+      options:
+        - label: The predecessor is Done or this is Stage 1.
+          required: true
+        - label: No confidential CAD or solver artifact is attached.
+          required: true
+        - label: Fake/unit evidence and real Mechanical evidence have separate acceptance criteria.
+          required: true
+        - label: Done requires the exact-commit Windows gate unless the issue explicitly documents that no live gate applies.
+          required: true

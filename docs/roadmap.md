@@ -33,7 +33,8 @@ Goal: let a user select real model entities in interactive Mechanical and
 retrieve a read-only, structured, revision-scoped context through MCP. This
 must be useful without an LLM explanation.
 
-Implemented and awaiting live validation:
+Implemented and live validated for the bounded Mechanical 2025 R1 SP03 test
+session described below:
 
 - Capture the current graphical selection and active tree objects explicitly.
 - Handle empty, single, and multiple selections plus supported geometry, node,
@@ -44,12 +45,17 @@ Implemented and awaiting live validation:
 - Cover the fake path with unit tests and the public tools with an in-process MCP
   round trip.
 
-Next validation work:
+Windows evidence at commit `90ec822` covered empty, one-face, two-face,
+active-tree, mesh-node, mesh-element, and element-face selections plus both
+connect-only opt-in integration tests. Element ID 16 and face index 2 retained
+their source position. The one GUI/PID and launch attempt were reused, then
+normal GUI shutdown left zero Mechanical processes and zero port-10000
+listeners. The explicitly insecure listener was bound to `::`; the result is
+therefore not a general security or cross-version claim.
 
-- Run the default-skipped integration tests against Mechanical 2026 R1 in an
-  interactive `batch=False` or explicitly declared GUI-connected session.
-- Confirm native runtime type text and actual population of `Ids`, `Entities`,
-  `ElementFaceIndices`, and `Tree.ActiveObjects` for representative selections.
+Next validation work is version-specific regression coverage for other
+supported Mechanical builds, especially a secure WNUA/mTLS path. New mutating
+thermal stages retain their own separate Windows gates.
 
 Later potential capabilities:
 
@@ -82,10 +88,13 @@ Potential capabilities:
 - Demonstrate one end-to-end flow: select, explain, preview, apply, solve, and
   summarize results.
 
-The first mutating action and physical phenomenon will be chosen explicitly
-after the selection prototype is validated. Mesh controls, mapped CSV fields,
-loads, contacts, material models, and coupled workflows are illustrative
-examples only, not roadmap commitments.
+The first staged physical workflow has now been chosen explicitly:
+steady-state thermal analysis beginning with controlled local CAD intake and a
+ring-only baseline. It remains unimplemented. Its ten ordered development and
+licensed-validation gates are defined in
+[Steady-State Thermal Workflow](steady-state-thermal-workflow.md) and tracked
+through the GitHub parent/child issues. Mesh controls, mapped CSV fields, and
+other coupled workflows remain illustrative examples rather than commitments.
 
 ## v0.4 Prepared Project Orchestration
 
