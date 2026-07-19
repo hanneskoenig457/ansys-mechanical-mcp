@@ -68,6 +68,21 @@ merged after their ordinary CI and review gate.
 
 ## Handoff Comment Templates
 
+### Dual delivery requirement
+
+Every completed or blocked machine gate must deliver its handoff twice:
+
+1. Post the durable evidence, exact commit, status, and next-machine prompt to
+   the stage issue.
+2. Show the same short, fully copyable prompt directly in the final chat
+   response to the operator.
+
+The final response must name the issue, result, next responsible machine, and
+exact commit when one exists. It must not merely say that a prompt was posted
+on GitHub or require the operator to open a comment to retrieve it. GitHub is
+the durable source of truth; the chat response is the immediately visible
+handoff.
+
 Development-to-Windows:
 
 ```markdown
@@ -142,3 +157,8 @@ Issue; ändere im Normalfall keinen Quellcode.
 
 The operator therefore coordinates by issue number and explicit machine role;
 the issue and repository supply the detailed instructions.
+
+At the end of the current chat, the responsible agent repeats the applicable
+starter block in its final response with the real issue number and, for a
+Windows handoff, the exact validated target commit already recorded in the
+issue.
