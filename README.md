@@ -25,13 +25,16 @@ tools:
 
 The session lifecycle, model inspection, and selection path are unit-tested
 with injected fakes, including an in-process MCP client/server round trip. A
-licensed Windows check has confirmed one explicit-insecure 2025 R1 SP03 GUI
-start and first model inspection. That check also found a non-loopback listener
-and therefore stopped before session reuse and selection validation. These
-remaining paths are not yet validated end-to-end against Mechanical. Internal,
-fake-tested helpers for a controlled script fallback, an existing Static
-Structural solve, and PyDPF result metadata remain unexposed. The project does
-not simulate solver behavior.
+licensed Windows check at commit `90ec822` confirmed one explicitly accepted
+insecure Mechanical 2025 R1 SP03 GUI session, session reuse with one launch
+attempt, and real snapshots for empty, single-face, multi-face, active-tree,
+mesh-node, mesh-element, and element-face selections. Both connect-only opt-in
+integration tests passed. The listener was again observed on `::`, so this
+remains an experimental harmless read-only path with per-session risk
+acceptance, deliberate GUI shutdown, and zero-process/zero-listener cleanup.
+Internal, fake-tested helpers for a controlled script fallback, an existing
+Static Structural solve, and PyDPF result metadata remain unexposed. The
+project does not simulate solver behavior.
 
 Mechanical access is opt-in: omitting `--mechanical-mode` leaves the server
 unconfigured, and either Mechanical tool returns a structured configuration
@@ -57,13 +60,20 @@ larger workflow remains a design target.
 
 A neutral viewer or build123d/OpenCascade adapter remains an optional research
 path if the Mechanical prototype later demonstrates a real cross-CAE or
-independent-geometry need. Which physical phenomena and engineering actions are
-implemented first is deliberately not decided yet.
+independent-geometry need. Steady-state thermal analysis is now the explicitly
+selected next staged workflow. It remains unimplemented: the ring-only
+baseline, bearing seat, contact, coating, and TEG path are ordered roadmap
+items with separate development and licensed-validation gates.
 
 See
 [Selection Context and Semantic CAE Interaction](docs/selection-context-architecture.md)
 for the architecture decision and [the roadmap](docs/roadmap.md) for the staged
 implementation path.
+
+See the [steady-state thermal workflow](docs/steady-state-thermal-workflow.md)
+for the engineering boundary and
+[GitHub development workflow](docs/github-development-workflow.md) for the
+two-machine issue and evidence contract.
 
 ## v0.1 Scope
 

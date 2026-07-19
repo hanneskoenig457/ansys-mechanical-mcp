@@ -422,3 +422,19 @@ Ansys products.
 Read-only selection capture is implemented and fake-tested. Semantic
 description, target resolution, highlighting, native model mutation, solve
 exposure, and DPF exposure are not part of this slice.
+
+### Subsequent bounded Windows validation
+
+On 2026-07-19, the same `90ec822` checkout and Mechanical 2025 R1 SP03 test
+environment completed the previously deferred read-only path after the operator
+explicitly accepted the displayed `::`:10000 listener risk for that single
+harmless session. The second inspection reused the same PID and one launch
+attempt. Real captures succeeded for empty graphics selection, one and two
+faces, active Modal tree object, mesh node 404, mesh element 14, and element 16
+face index 2 with verified source-position pairing. Both opt-in connect-only
+integration tests passed. Controlled GUI shutdown left no `AnsysWBU` process
+and no port-10000 listener.
+
+This is external Windows evidence for that exact build and commit. It does not
+validate a secure transport, another Mechanical release, model mutation,
+thermal analysis, solve exposure, or DPF exposure.
