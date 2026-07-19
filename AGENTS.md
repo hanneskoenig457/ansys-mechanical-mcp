@@ -108,6 +108,15 @@ When a task names a GitHub issue, read its current body, dependency links, and
 handoff comments after synchronizing the checkout. Do not require the operator
 to paste a second long prompt when the issue already contains the contract.
 
+At the end of every machine gate, deliver the handoff in both places:
+
+- post the durable evidence and next-machine prompt to the GitHub issue; and
+- include the same short, fully copyable next-machine prompt directly in the
+  final user-facing chat response.
+
+Never require the operator to discover the prompt in an issue comment. The
+issue is the durable record; the final chat response is the visible handoff.
+
 ## Architecture Direction
 
 Use the modular layout:
