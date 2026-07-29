@@ -19,10 +19,12 @@ MCP server entrypoint
   +-- products/mechanical: PyMechanical session, inspection, selection capture
   |     |
   |     +-- exact-executable gRPC transport preflight and safety policy
+  |     +-- geometry-import inspection/apply adapter
   |
   +-- products/dpf: PyDPF result extraction
   |
   +-- workflows/static_structural: higher-level workflow operations
+  +-- workflows/cad_import: allowed roots, intake, deterministic plan, one-shot apply
   |
   +-- later selection stages: optional describe, then resolve/validate before mutation
 ```
@@ -132,6 +134,43 @@ mode), so this process-wide Mechanical lifecycle is currently supported only
 over stdio. Both CLI and programmatic HTTP/SSE entry points reject unsupported
 transports. Expanding transport support requires a separate lifecycle decision,
 not silent per-request Mechanical creation.
+
+## Stage-1 Local CAD Import Boundary
+
+`CadImportWorkflow` owns one set of import plans for the same stdio application
+lifespan as the Mechanical session. It keeps absolute input/output paths
+internal and returns only relative file metadata plus a SHA-256. The configured
+roots must already exist and be distinct and non-overlapping. Canonical
+resolution rejects absolute paths, parent traversal, symlink escapes,
+unsupported input/output extensions, non-empty output directories, and
+overwrite. Requiring an empty target directory protects unknown Mechanical
+side files in addition to the requested `.mechdb`.
+
+`intake_local_cad` never establishes Mechanical. `preview_geometry_import`
+combines the current file metadata, unused output, and a complete native
+project fingerprint into canonical JSON and hashes it to a deterministic plan
+ID. It retains the resolved paths privately. A plan is available only when
+Mechanical reports zero analyses, zero geometry-import objects, and zero
+bodies. Partial state is unknown, not empty.
+
+`apply_geometry_import` accepts only that exact retained plan ID. It rehashes
+the file, rechecks output non-existence, and repeats native project inspection.
+The single Mechanical script then repeats the project guard immediately before
+calling `AddGeometryImport()`, `Import(...)`, and standalone
+`Project.SaveAs(..., False)`. The plan is consumed before that script because a
+late transport failure cannot prove whether mutation occurred. There is no
+automatic retry or rollback that might hide a partial native mutation.
+
+The Mechanical-side adapter disables named-selection, coordinate-system, and
+material-property processing for this narrow slice. Post-import evidence comes
+from native `GeoData` bodies plus import/project/unit metadata; no CAD contents,
+absolute paths, solver artifacts, or fake body data enter the result. Remote
+Mechanical hosts are rejected because the configured filesystem boundary is
+explicitly local to the MCP host.
+
+This contract is fake/unit/in-process-MCP tested on macOS. Its STEP translator,
+empty-project shape, body/unit readback, `SaveAs`, and cleanup behavior remain a
+licensed Windows validation gate.
 
 ## Extension Path
 

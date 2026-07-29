@@ -62,6 +62,10 @@ async def test_server_registers_implemented_tools() -> None:
         "check_environment",
         "inspect_mechanical_model",
         "capture_current_selection",
+        "intake_local_cad",
+        "preview_geometry_import",
+        "apply_geometry_import",
+        "inspect_imported_geometry",
     ]
     assert all(tool.outputSchema is not None for tool in tools)
 
@@ -84,8 +88,9 @@ def test_cli_keeps_mechanical_unconfigured_without_explicit_mode(
         def run(self, *, transport: str) -> None:
             captured["transport"] = transport
 
-    def fake_create_mcp_server(*, session_config):
+    def fake_create_mcp_server(*, session_config, cad_import_config):
         captured["config"] = session_config
+        captured["cad_import_config"] = cad_import_config
         return FakeServer()
 
     monkeypatch.setattr(server_module, "create_mcp_server", fake_create_mcp_server)
@@ -95,6 +100,8 @@ def test_cli_keeps_mechanical_unconfigured_without_explicit_mode(
     assert captured["transport"] == "stdio"
     assert captured["config"].mode is None
     assert captured["config"].effective_cleanup_on_exit is False
+    assert captured["cad_import_config"].input_root is None
+    assert captured["cad_import_config"].output_root is None
 
 
 def test_cli_started_ui_cleanup_requires_explicit_opt_in(
@@ -106,8 +113,9 @@ def test_cli_started_ui_cleanup_requires_explicit_opt_in(
         def run(self, *, transport: str) -> None:
             captured["transport"] = transport
 
-    def fake_create_mcp_server(*, session_config):
+    def fake_create_mcp_server(*, session_config, cad_import_config):
         captured["config"] = session_config
+        captured["cad_import_config"] = cad_import_config
         return FakeServer()
 
     monkeypatch.setattr(server_module, "create_mcp_server", fake_create_mcp_server)
@@ -127,8 +135,9 @@ def test_cli_parses_transport_and_remote_security_options(
         def run(self, *, transport: str) -> None:
             captured["transport"] = transport
 
-    def fake_create_mcp_server(*, session_config):
+    def fake_create_mcp_server(*, session_config, cad_import_config):
         captured["config"] = session_config
+        captured["cad_import_config"] = cad_import_config
         return FakeServer()
 
     monkeypatch.setattr(server_module, "create_mcp_server", fake_create_mcp_server)
@@ -149,6 +158,34 @@ def test_cli_parses_transport_and_remote_security_options(
     assert config.transport_mode == "insecure"
     assert config.allow_insecure_remote is True
     assert captured["transport"] == "stdio"
+
+
+def test_cli_parses_separate_cad_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured = {}
+
+    class FakeServer:
+        def run(self, *, transport: str) -> None:
+            captured["transport"] = transport
+
+    def fake_create_mcp_server(*, session_config, cad_import_config):
+        captured["session_config"] = session_config
+        captured["cad_import_config"] = cad_import_config
+        return FakeServer()
+
+    monkeypatch.setattr(server_module, "create_mcp_server", fake_create_mcp_server)
+
+    server_module.main(
+        [
+            "--cad-input-root",
+            "local-validation/inputs",
+            "--cad-output-root",
+            "local-validation/outputs",
+        ]
+    )
+
+    config = captured["cad_import_config"]
+    assert str(config.input_root) == "local-validation/inputs"
+    assert str(config.output_root) == "local-validation/outputs"
 
 
 @pytest.mark.anyio

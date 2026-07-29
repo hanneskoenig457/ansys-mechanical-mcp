@@ -110,6 +110,13 @@ The usual sequence is:
 No live-validation handoff authorizes model mutation, mesh generation, solve,
 new physics, named selections, highlighting, or target resolution.
 
+That rule applies to the existing read-only inspection/selection gate. A stage
+issue may separately authorize one precisely bounded mutation only after its
+exact reviewed commit, prerequisites, tool order, and cleanup contract are
+recorded. Issue #10 is the first such gate and permits only one confirmed STEP
+import plus save to a new standalone `.mechdb`; it does not authorize thermal
+analysis, material, loads, mesh, solve, or retry.
+
 Auto mode never starts a confirmed legacy SP insecurely. It first returns
 `MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` with attempt count zero. After
 the operator persists explicit local `insecure`, verify the listening endpoint
@@ -135,6 +142,46 @@ configuration. Display the actual listener after every new start. Close
 Mechanical deliberately through the normal operator-controlled path after the
 test, then verify again that both the Mechanical process and tested listener
 are gone.
+
+### Stage-1 confirmed CAD import gate
+
+Run this only for an exact Issue-#10 commit marked `Ready for Windows` and only
+with an operator present:
+
+1. Require a secure Mechanical transport or an OS-verified loopback-only
+   listener. The existing experimental acceptance for a listener bound to
+   `0.0.0.0` or `::` is read-only and does not authorize CAD import.
+2. Prepare one harmless non-confidential `.step` or `.stp` below the configured
+   gitignored `local-validation/inputs` root and an existing, separate
+   `local-validation/outputs` root. Use a new empty target directory for the
+   `.mechdb` and any Mechanical side files. Confirm `git status` does not track
+   either artifact.
+3. Open Mechanical independently with a new/proven-empty test project. Record
+   GUI/PID, version/build, transport, listener, zero analyses, zero
+   geometry-import objects, and zero bodies.
+4. Call `intake_local_cad` and record only safe relative path, extension, size,
+   and SHA-256.
+5. Call `preview_geometry_import` with an unused relative `.mechdb` output.
+   Verify the returned native state is complete and empty. Review the exact
+   plan ID, assumptions, and warnings before confirming.
+6. Call `apply_geometry_import` once with exactly that plan ID. Never retry a
+   timeout, transport error, invalid JSON, or other possibly mutating failure.
+   Stop and inspect Mechanical manually instead.
+7. Call `inspect_imported_geometry` after a successful apply. Record actual
+   import count, body count, safe body IDs/names/types/materials, unit system,
+   project filename/identity, output existence, attempt count, and warnings.
+8. Confirm that a repeated apply with the same plan ID is rejected without a
+   second import. Do not add an analysis, material, boundary condition, mesh,
+   or solve.
+9. Close the harmless project and Mechanical through the normal
+   operator-controlled path. Verify zero Mechanical processes and zero tested
+   listeners. Keep or delete the local input/output only according to the
+   operator's local evidence policy; never commit or upload them.
+
+If the installed Mechanical release exposes a different empty-project
+collection shape, STEP translator behavior, body/unit readback, standalone
+`SaveAs` behavior, or output side effect, capture the exact structured result
+and stop. Do not patch source on Windows.
 
 Do not retry a failed start by repeatedly calling inspection. The manager
 latches a start failure for the lifetime of the MCP process because a failure

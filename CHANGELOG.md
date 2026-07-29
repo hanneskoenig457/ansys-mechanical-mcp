@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add the Stage-1 local STEP intake and controlled Mechanical import surface:
+  separate non-overlapping roots, safe file metadata, deterministic preview
+  plans, exact confirmation, project/hash/output revalidation, one-shot
+  import/save with no overwrite or automatic retry, and native post-inspection.
+- Add fake/unit/in-process MCP coverage and a separately gated, default-skipped
+  mutating Windows integration test. Licensed Mechanical validation remains
+  required before Stage 1 is complete.
 - Add a safety-bounded Mechanical gRPC transport policy with explicit
   `auto`, `wnua`, `mtls`, and `insecure` modes. Local auto-start now performs
   an exact-executable PyMechanical revision/service-pack preflight, preserves
