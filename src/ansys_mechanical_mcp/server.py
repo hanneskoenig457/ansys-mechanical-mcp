@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import anyio
@@ -23,6 +24,7 @@ from ansys_mechanical_mcp.products.mechanical.session import (
     MechanicalSessionError,
     MechanicalSessionManager,
 )
+from ansys_mechanical_mcp.workflows.cad_import import CadImportConfig
 
 SERVER_NAME = "ansys-mechanical-mcp"
 
@@ -65,6 +67,7 @@ def create_mcp_server(
     *,
     session_config: MechanicalSessionConfig | None = None,
     session_manager: MechanicalSessionManager | None = None,
+    cad_import_config: CadImportConfig | None = None,
 ) -> MechanicalMCPServer:
     """Create the MCP server and register the implemented v0.1 tools."""
     if session_config is not None and session_manager is not None:
@@ -78,7 +81,7 @@ def create_mcp_server(
             "Practical Ansys Mechanical/FEM automation tools. "
             "The v0.1 surface is intentionally narrow and does not simulate solver behavior."
         ),
-        lifespan=create_mechanical_lifespan(manager),
+        lifespan=create_mechanical_lifespan(manager, cad_import_config),
     )
 
     @server.tool(
@@ -123,6 +126,81 @@ def create_mcp_server(
         """Capture Mechanical's current native selection without model mutation."""
         app_context = ctx.request_context.lifespan_context
         result = await anyio.to_thread.run_sync(app_context.capture_selection)
+        return _mcp_tool_result(result)
+
+    @server.tool(
+        name="intake_local_cad",
+        description=(
+            "Read safe metadata for one relative STEP path inside the configured local CAD input "
+            "root. Rejects absolute paths, parent traversal, root escapes, and unsupported files. "
+            "Never starts or mutates Mechanical."
+        ),
+        structured_output=True,
+    )
+    async def intake_local_cad_tool(
+        input_path: str,
+        ctx: Context[ServerSession, MechanicalApplicationContext],
+    ) -> Annotated[CallToolResult, dict[str, Any]]:
+        """Inspect a local CAD file without returning its contents or absolute path."""
+        app_context = ctx.request_context.lifespan_context
+        result = await anyio.to_thread.run_sync(app_context.intake_local_cad, input_path)
+        return _mcp_tool_result(result)
+
+    @server.tool(
+        name="preview_geometry_import",
+        description=(
+            "Inspect a relative STEP input, a new relative .mechdb output, and the current local "
+            "Mechanical project. Returns a deterministic plan ID only when the project is proven "
+            "empty. This tool does not mutate the model."
+        ),
+        structured_output=True,
+    )
+    async def preview_geometry_import_tool(
+        input_path: str,
+        output_project: str,
+        ctx: Context[ServerSession, MechanicalApplicationContext],
+    ) -> Annotated[CallToolResult, dict[str, Any]]:
+        """Prepare an exact import plan after read-only revalidation."""
+        app_context = ctx.request_context.lifespan_context
+        result = await anyio.to_thread.run_sync(
+            app_context.preview_geometry_import,
+            input_path,
+            output_project,
+        )
+        return _mcp_tool_result(result)
+
+    @server.tool(
+        name="apply_geometry_import",
+        description=(
+            "Confirm and apply exactly one retained geometry-import plan by its exact plan ID. "
+            "Rechecks file hash, output non-existence, and Mechanical project identity; never "
+            "overwrites or automatically retries a possibly mutating failure."
+        ),
+        structured_output=True,
+    )
+    async def apply_geometry_import_tool(
+        plan_id: str,
+        ctx: Context[ServerSession, MechanicalApplicationContext],
+    ) -> Annotated[CallToolResult, dict[str, Any]]:
+        """Apply one confirmed import plan at most once."""
+        app_context = ctx.request_context.lifespan_context
+        result = await anyio.to_thread.run_sync(app_context.apply_geometry_import, plan_id)
+        return _mcp_tool_result(result)
+
+    @server.tool(
+        name="inspect_imported_geometry",
+        description=(
+            "Return read-only native Mechanical project, import, body, unit-system, and emptiness "
+            "evidence from the configured local session."
+        ),
+        structured_output=True,
+    )
+    async def inspect_imported_geometry_tool(
+        ctx: Context[ServerSession, MechanicalApplicationContext],
+    ) -> Annotated[CallToolResult, dict[str, Any]]:
+        """Inspect imported geometry without model mutation."""
+        app_context = ctx.request_context.lifespan_context
+        result = await anyio.to_thread.run_sync(app_context.inspect_imported_geometry)
         return _mcp_tool_result(result)
 
     return server
@@ -200,6 +278,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Certificate directory for Mechanical mTLS transport.",
     )
     parser.add_argument(
+        "--cad-input-root",
+        help=(
+            "Existing local directory containing allowed STEP inputs. Public CAD tools accept "
+            "only relative paths inside this root."
+        ),
+    )
+    parser.add_argument(
+        "--cad-output-root",
+        help=(
+            "Existing separate local directory for new .mechdb outputs. Existing files are never "
+            "overwritten."
+        ),
+    )
+    parser.add_argument(
         "--mechanical-allow-insecure-remote",
         action="store_true",
         help=(
@@ -252,7 +344,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     except MechanicalSessionError as exc:
         parser.error(str(exc))
 
-    create_mcp_server(session_config=session_config).run(transport=args.transport)
+    cad_import_config = CadImportConfig(
+        input_root=Path(args.cad_input_root) if args.cad_input_root else None,
+        output_root=Path(args.cad_output_root) if args.cad_output_root else None,
+    )
+    create_mcp_server(
+        session_config=session_config,
+        cad_import_config=cad_import_config,
+    ).run(transport=args.transport)
 
 
 if __name__ == "__main__":

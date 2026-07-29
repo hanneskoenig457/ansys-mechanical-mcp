@@ -4,12 +4,13 @@
 
 Goal: control and postprocess an existing Static Structural Mechanical analysis.
 
-Current state: `check_environment`, read-only `inspect_mechanical_model`, and
-read-only `capture_current_selection` are exposed through MCP. Mechanical tools
+Current state: `check_environment`, read-only `inspect_mechanical_model`,
+read-only `capture_current_selection`, and four Stage-1 CAD
+intake/preview/apply/inspect tools are exposed through MCP. Mechanical tools
 share one lazy stdio lifespan context with explicit start/connect ownership and
-idempotent cleanup. This path is fake-tested, including an in-process MCP round
-trip, but still needs opt-in validation against a real licensed Mechanical
-installation.
+idempotent cleanup. The CAD-import path is fake-tested, including an in-process
+MCP round trip, but still needs opt-in validation against a real licensed
+Mechanical installation.
 
 Internal helpers for controlled scripting, an existing Static Structural solve,
 and PyDPF metadata remain fake-tested and deliberately unexposed.
@@ -23,9 +24,9 @@ Implemented foundation:
 - Solve an existing Static Structural analysis.
 - Extract PyDPF result metadata and available-result names.
 
-Only environment diagnostics, session lifecycle, model inspection, and native
-selection capture are MCP-exposed today. Solve and result bullets remain v0.1
-targets, not current public tools.
+Only environment diagnostics, session lifecycle, model inspection, native
+selection capture, and Stage-1 CAD intake/import are MCP-exposed today. Solve
+and result bullets remain v0.1 targets, not current public tools.
 
 ## v0.2 Native Mechanical Selection Context
 
@@ -90,8 +91,9 @@ Potential capabilities:
 
 The first staged physical workflow has now been chosen explicitly:
 steady-state thermal analysis beginning with controlled local CAD intake and a
-ring-only baseline. It remains unimplemented. Its ten ordered development and
-licensed-validation gates are defined in
+ring-only baseline. Stage 1 is implemented on the Mac but remains blocked on
+licensed validation; no thermal analysis stage is implemented. Its ten ordered
+development and licensed-validation gates are defined in
 [Steady-State Thermal Workflow](steady-state-thermal-workflow.md) and tracked
 through the GitHub parent/child issues. Mesh controls, mapped CSV fields, and
 other coupled workflows remain illustrative examples rather than commitments.

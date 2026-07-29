@@ -3,9 +3,10 @@
 ## Status And Scope
 
 Steady-state thermal analysis is the next explicitly selected engineering
-workflow for this repository. It is a tracked roadmap, not an implemented or
-validated capability. The public MCP surface still contains only the tools
-listed in `README.md`.
+workflow for this repository. Stage 1 now has a macOS fake/unit/in-process-MCP
+implementation for safe local STEP intake and confirmed import, but it is not
+licensed-Windows validated. No thermal analysis capability is implemented.
+The public MCP surface is listed in `README.md`.
 
 The first engineering model is deliberately a ring-only baseline. It proves
 the safe CAD-to-result pipeline before adding the aluminium bearing seat,

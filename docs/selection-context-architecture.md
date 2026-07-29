@@ -2,11 +2,10 @@
 
 Status: accepted architecture direction for the Mechanical prototype.
 The deterministic read-only snapshot and `capture_current_selection` MCP tool
-are implemented and fake-tested. Runtime validation against a licensed,
-interactive Mechanical installation is still pending. A first real model
-inspection succeeded on Mechanical 2025 R1 SP03, but validation stopped after
-Windows observed its insecure listener bound to `::`; no SelectionSnapshot case
-was run. Semantic explanation, resolution, highlighting, and mutation remain
+are implemented, fake-tested, and live-validated for the bounded Mechanical
+2025 R1 SP03 cases recorded in the repository. Stage-1 local CAD import is a
+separate exact-plan mutation contract and is not selection-driven. Semantic
+explanation, selection-target resolution, and highlighting remain
 unimplemented.
 
 ## Decision

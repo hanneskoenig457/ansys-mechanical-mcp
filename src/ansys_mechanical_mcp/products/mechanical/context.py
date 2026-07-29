@@ -29,6 +29,8 @@ from ansys_mechanical_mcp.products.mechanical.session import (
     MechanicalTransportPreflightError,
 )
 from ansys_mechanical_mcp.products.mechanical.tools import inspect_mechanical_model
+from ansys_mechanical_mcp.products.mechanical.transport import is_loopback_host
+from ansys_mechanical_mcp.workflows.cad_import import CadImportConfig, CadImportWorkflow
 
 
 @dataclass(slots=True)
@@ -36,6 +38,7 @@ class MechanicalApplicationContext:
     """Lifespan-owned access to one lazy, serialized Mechanical session."""
 
     session_manager: MechanicalSessionManager
+    cad_import_workflow: CadImportWorkflow
     _operation_lock: RLock = field(default_factory=RLock, repr=False)
 
     @property
@@ -105,6 +108,68 @@ class MechanicalApplicationContext:
                 session_context=self.session_context,
             )
 
+    def intake_local_cad(self, input_path: str) -> ToolResult:
+        """Inspect one configured local CAD input without touching Mechanical."""
+        with self._operation_lock:
+            return self.cad_import_workflow.intake(input_path)
+
+    def preview_geometry_import(self, input_path: str, output_project: str) -> ToolResult:
+        """Inspect Mechanical and retain a deterministic import plan."""
+        with self._operation_lock:
+            preflight_error = self.cad_import_workflow.validate_preview_request(
+                input_path=input_path,
+                output_project=output_project,
+            )
+            if preflight_error is not None:
+                return preflight_error
+            session_or_error = self._local_import_session()
+            if isinstance(session_or_error, ToolResult):
+                return session_or_error
+            result = self.cad_import_workflow.preview(
+                session_or_error,
+                input_path=input_path,
+                output_project=output_project,
+            )
+            return _with_session_context(result, self.session_context)
+
+    def apply_geometry_import(self, plan_id: str) -> ToolResult:
+        """Apply one exact retained import plan without automatic retry."""
+        with self._operation_lock:
+            confirmation_error = self.cad_import_workflow.validate_confirmation(plan_id)
+            if confirmation_error is not None:
+                return confirmation_error
+            session_or_error = self._local_import_session()
+            if isinstance(session_or_error, ToolResult):
+                return session_or_error
+            result = self.cad_import_workflow.apply(session_or_error, plan_id=plan_id)
+            return _with_session_context(result, self.session_context)
+
+    def inspect_imported_geometry(self) -> ToolResult:
+        """Inspect native geometry through the configured local Mechanical session."""
+        with self._operation_lock:
+            session_or_error = self._local_import_session()
+            if isinstance(session_or_error, ToolResult):
+                return session_or_error
+            result = self.cad_import_workflow.inspect(session_or_error)
+            return _with_session_context(result, self.session_context)
+
+    def _local_import_session(self) -> Any | ToolResult:
+        config = self.session_manager.config
+        if config.mode == "connect" and not is_loopback_host(config.host or "127.0.0.1"):
+            return ToolResult(
+                success=False,
+                message=(
+                    "Stage-1 CAD import accepts only a Mechanical process on the same machine "
+                    "as the configured local filesystem roots."
+                ),
+                data={"session_context": self.session_context},
+                error="CAD_IMPORT_LOCAL_SESSION_REQUIRED",
+            )
+        try:
+            return self.session_manager.start_or_connect()
+        except MechanicalSessionError as exc:
+            return _session_error_result(exc, self.session_context)
+
     def close(self) -> None:
         """Run the manager's idempotent cleanup under the operation lock."""
         with self._operation_lock:
@@ -119,6 +184,7 @@ MechanicalLifespan = Callable[
 
 def create_mechanical_lifespan(
     session_manager: MechanicalSessionManager,
+    cad_import_config: CadImportConfig | None = None,
 ) -> MechanicalLifespan:
     """Create a FastMCP lifespan around an injected persistent manager."""
 
@@ -126,7 +192,10 @@ def create_mechanical_lifespan(
     async def app_lifespan(
         _server: FastMCP[MechanicalApplicationContext],
     ) -> AsyncIterator[MechanicalApplicationContext]:
-        context = MechanicalApplicationContext(session_manager=session_manager)
+        context = MechanicalApplicationContext(
+            session_manager=session_manager,
+            cad_import_workflow=CadImportWorkflow(cad_import_config),
+        )
         try:
             yield context
         finally:

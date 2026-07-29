@@ -32,6 +32,55 @@ Track official sources and verified API decisions here.
 
 ## Decisions
 
+### Stage-1 Mechanical geometry import (2026-07-29)
+
+Verified against official Mechanical 2025 R1 and PyMechanical documentation.
+The implementation remains fake-tested until Issue #10 receives licensed
+Windows evidence.
+
+- Mechanical 2025 R1 exposes
+  `Model.GeometryImportGroup.AddGeometryImport()` and the resulting
+  `GeometryImport.Import(filePath, Format, GeometryImportPreferences)` method.
+  Official PyMechanical examples use `Format.Automatic` and
+  `GeometryImportPreferences` through `run_python_script(...)`.
+  Sources:
+  https://scripting.mechanical.docs.pyansys.com/version/dev/api/ansys/mechanical/stubs/v251/Ansys/ACT/Automation/Mechanical/GeometryImportGroup.html
+  and
+  https://examples.mechanical.docs.pyansys.com/examples/basic/example_09_tracemapping.html
+- The first neutral whitelist is deliberately limited to STEP `.step` and
+  `.stp`. Ansys documents STEP as a neutral geometry format. Supporting IGES,
+  Parasolid, ACIS, native CAD, mesh-based imports, or proprietary formats would
+  expand translator and licensing assumptions and requires a later reviewed
+  contract.
+  Source:
+  https://ansyshelp.ansys.com/public/Views/Secured/corp/v251/en/wb2_help/wb2h_definegeom.html
+- Mechanical 2025 R1 documents
+  `Project.SaveAs(filePath, overwrite)` only for Mechanical opened
+  independently, without Workbench. Stage 1 therefore requires a standalone
+  new/proven-empty test project, a new `.mechdb` below the configured output
+  root, and `overwrite=False`; it does not claim Workbench project creation.
+  Source:
+  https://scripting.mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/stubs/v251/Ansys/ACT/Automation/Mechanical/Project.html
+- PyMechanical remote mode executes Mechanical object-model work through
+  `Mechanical.run_python_script(...)`, whose result is string-based. The
+  adapter therefore constructs a fixed controlled script, injects only
+  validated JSON string literals, and parses strict JSON readback. No
+  MCP-facing arbitrary script endpoint was added.
+  Source:
+  https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/mechanical/Mechanical.html
+- The public file boundary is local only. PyMechanical documents `upload()`,
+  but Stage 1 neither uploads CAD nor accepts a non-loopback Mechanical host.
+  Adding remote transfer would require a distinct provenance, destination, and
+  cleanup contract.
+  Source:
+  https://mechanical.docs.pyansys.com/version/stable/api/ansys/mechanical/core/mechanical/Mechanical.html
+
+Decision: expose separate intake, preview, exact-plan apply, and post-inspection
+tools. Bind the deterministic plan to STEP size/SHA-256, unused `.mechdb`
+output, product/project identity, and zero analysis/import/body counts.
+Revalidate on both sides of the gRPC call. Consume before the one mutating
+script and never auto-retry because a late failure may follow partial mutation.
+
 ### Mechanical 2025 R1 SP03 listener-binding research (2026-07-19)
 
 The investigation was deliberately limited to official PyMechanical
@@ -350,6 +399,10 @@ Implemented in this repository:
 - immutable cleanup policy plus idempotent cleanup after success and retained
   session state for retry after a cleanup failure;
 - structured `inspect_mechanical_model` and `capture_current_selection` tools;
+- structured `intake_local_cad`, `preview_geometry_import`,
+  `apply_geometry_import`, and `inspect_imported_geometry` tools with separate
+  local roots, deterministic plan confirmation, one-shot apply, and native
+  post-import readback;
 - a JSON-compatible `SelectionSnapshot` with native IDs, supported normalized
   types, active tree context, nullable model/revision fields, deterministic
   summary, `capture_status`/`is_complete`, warnings, and errors;
@@ -375,6 +428,9 @@ Validated without Ansys through injected fakes and an in-process MCP round trip:
   element-face, parse-position, bounded/truncated, unknown-type, and active-tree
   selection payloads;
 - strict JSON serialization and MCP registration.
+- Stage-1 path escape, symlink, input change, output overwrite, project
+  emptiness/staleness, deterministic plan, one-attempt/no-retry, native
+  readback, and in-process MCP cases.
 
 Not validated against a real Mechanical runtime:
 
@@ -388,6 +444,9 @@ Not validated against a real Mechanical runtime:
 - WNUA/mTLS handshakes and listener binding for other Mechanical builds;
 - any model/document/revision identifier beyond the nullable fields currently
   returned by the conservative script.
+- Mechanical 2025 R1 empty-project collection behavior, STEP translation,
+  import-object/body/unit readback, standalone `Project.SaveAs`, and safe
+  cleanup for the Stage-1 mutating gate.
 
 ## Geometry Kernel Boundary
 
