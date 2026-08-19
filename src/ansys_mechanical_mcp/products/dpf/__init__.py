@@ -1,2 +1,0 @@
-"""PyDPF adapter."""
-

@@ -1,2 +1,0 @@
-"""DPF MCP tool contracts."""
-
