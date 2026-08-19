@@ -96,11 +96,36 @@ Rules specific to this path:
   is a no-op below Workbench framework 25.2; this one reports 25.1). Releasing
   a system's Mechanical server means closing Workbench or Mechanical itself —
   warn the user before doing that.
-- Workbench cannot be attached to after the fact. If the user has an unsaved
-  project open in an already-running Workbench GUI, they must save and close it
-  first; `StartServer()` only takes effect at launch. Do not attempt GUI
-  automation, scheduled-task desktop tricks, or UI Automation to work around
-  this — it was tried and does not work (Windows Session 0 isolation).
+- A running Workbench cannot be attached to *programmatically*, but it can be
+  opened up *by hand*. `StartServer()` is a Workbench-internal command, and the
+  official PyWorkbench docs state it plainly: "You can always start a Workbench
+  server by running the `StartServer()` command in any Workbench session." So
+  if the user has an unsaved project open in an already-running Workbench GUI,
+  do **not** tell them to save and close it. Tell them to run, in the VM under
+  File → Scripting → Open Command Window:
+
+  ```python
+  StartServer(PortToUse=51000)
+  ```
+
+  Then run `ensure-ansys-workbench-mechanical-runtime` as normal — it detects
+  the listening port and reuses that session. `EnvironmentPrefix` is not needed:
+  it is used only by PyWorkbench's launcher to parse the port out of Workbench's
+  stdout, and never by the client.
+
+  What is genuinely impossible is reaching that GUI from here: sending
+  `StartServer()` over gRPC would require the gRPC server it is meant to start,
+  and a plain SSH session lands in Windows Session 0, which cannot reach the
+  Session 1 desktop. Do not attempt GUI automation, scheduled-task desktop
+  tricks, or UI Automation to work around it — tried, does not work. Nor does
+  `RunWB2.exe -R <journal>`: verified by test, it spawns a **new** instance
+  (the journal reported a different PID) and left the running one untouched.
+- Mechanical has **no** equivalent. Its gRPC server is a launch argument only
+  (`-grpc` / `--grpc-host` in `ansys-mechanical-core`'s `launcher.py`), and
+  `start_mechanical_server()` sends `LaunchMechanicalServerOnSystem(...)`, which
+  *replaces* the system's Mechanical process. An already-open Mechanical session
+  without gRPC cannot be rescued — say so rather than replacing it and losing
+  the user's unsaved work.
 
 Full architecture, the source-verified `-E` launch mechanism, and all known
 caveats are in

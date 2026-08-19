@@ -92,15 +92,36 @@ RunWB2.exe -I -E "StartServer(EnvironmentPrefix='<uuid>', PortToUse=<port>, Secu
 `-E "<command>"` executes an IronPython command at Workbench startup -- this
 is the officially used, source-verified way to start the project-schematic
 gRPC server without typing `StartServer()` into the Command Window by hand.
-It is a **launch-time argument only**: there is no supported way to inject a
-command into an already-running interactive Workbench process (confirmed
-independently: a plain SSH session lands in Windows Session 0, which cannot
-reach the Session 1 desktop at all -- `CopyFromScreen` from Session 0 fails
-outright with an invalid-handle error, and `SetForegroundWindow`/UI Automation
-against a Session-1 window from a Session-0 scheduled task do not reliably
-work either). If a relevant project is open unsaved in an already-running
-Workbench GUI, save and close it first; there is no way to attach to it
-without that step.
+`-E` itself is a launch-time argument, but `StartServer()` is **not** limited to
+launch. The official PyWorkbench user guide says: "You can always start a
+Workbench server by running the `StartServer()` command in any Workbench
+session." What is unavailable is an *automated* path into a running instance,
+for two independent reasons:
+
+1. Chicken-and-egg. PyWorkbench is purely a gRPC client
+   (`workbench_client.py` builds a channel via `create_channel()` and speaks
+   through `WorkbenchServiceStub`; there is no second transport). Sending
+   `StartServer()` through it would require the server it is meant to start.
+2. Session isolation. A plain SSH session lands in Windows Session 0, which
+   cannot reach the Session 1 desktop at all -- `CopyFromScreen` from Session 0
+   fails outright with an invalid-handle error, and `SetForegroundWindow`/UI
+   Automation against a Session-1 window from a Session-0 scheduled task do not
+   reliably work either.
+
+`RunWB2.exe -R <journal>` is not a way around this either. Tested against a
+live session: the journal ran, but reported a PID belonging to neither the
+running `RunWB2` nor its `AnsysFWW` -- a fresh instance was started, executed
+the journal, and exited, leaving the running session and its gRPC port
+untouched. (It did run headless from Session 0, which is worth knowing, but a
+fresh instance is exactly what the bootstrap already creates.)
+
+So a project open unsaved in an already-running Workbench GUI does **not** have
+to be saved and closed. The user runs `StartServer(PortToUse=51000)` in
+Workbench's own Command Window (File -> Scripting -> Open Command Window); the
+runtime script then finds the port listening and reuses that session.
+`EnvironmentPrefix` is not required -- `workbench_launcher.py` uses it only to
+strip a prefix off the port it parses from Workbench's stdout, and
+`workbench_client.py` never references it.
 
 ## Cold start: licensing must be ready first
 

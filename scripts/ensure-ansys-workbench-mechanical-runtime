@@ -39,8 +39,51 @@ CONTROL_SOCKET="${CONTROL_DIR}/ssh-control"
 PROJECT_PATH="${1:-${ANSYS_WORKBENCH_PROJECT_PATH:-}}"
 SYSTEM_NAME="${2:-${ANSYS_WORKBENCH_SYSTEM_NAME:-}}"
 
-log() { print -u2 -- "[ansys-workbench-runtime] $*"; }
+# Phase timing. A cold start is dominated by waiting, and the log used to say
+# nothing about which wait cost what -- reconstructing it afterwards from
+# Win32_OperatingSystem.LastBootUpTime and process start times only resolves
+# the phases that happen to spawn a process. Every log line now carries its
+# offset from script start, and a breakdown is printed on exit (including on
+# failure, so a run that dies in licensing still shows where the time went).
+T0=${SECONDS}
+typeset -a PHASE_NAMES PHASE_TIMES
+
+elapsed() {
+  local e=$(( SECONDS - T0 ))
+  printf '%02d:%02d' $(( e / 60 )) $(( e % 60 ))
+}
+
+log() { print -u2 -- "[ansys-workbench-runtime +$(elapsed)] $*"; }
 fail() { log "ERROR: $*"; exit 1; }
+
+mark() {
+  PHASE_NAMES+=("$1")
+  PHASE_TIMES+=("$(( SECONDS - T0 ))")
+}
+
+# Prefix each line a remote command emits with the elapsed time it arrived at.
+# The Windows bootstrap prints its own progress (interactive session, network,
+# licensing, Workbench start) and those lines are exactly the ones whose timing
+# the shell cannot otherwise see.
+stamp() { while IFS= read -r line; do print -u2 -- "[ansys-workbench-runtime +$(elapsed)] ${line}"; done }
+
+summary() {
+  local n=${#PHASE_NAMES[@]}
+  (( n > 0 )) || return 0
+  print -u2 -- "[ansys-workbench-runtime] --- phase timings (elapsed / duration) ---"
+  local i prev=0 d
+  for (( i = 1; i <= n; i++ )); do
+    d=$(( PHASE_TIMES[i] - prev ))
+    printf '[ansys-workbench-runtime]   %-32s %02d:%02d  (+%02d:%02d)\n' \
+      "${PHASE_NAMES[i]}" \
+      $(( PHASE_TIMES[i] / 60 )) $(( PHASE_TIMES[i] % 60 )) \
+      $(( d / 60 )) $(( d % 60 )) >&2
+    prev=${PHASE_TIMES[i]}
+  done
+  printf '[ansys-workbench-runtime]   %-32s %02d:%02d\n' "TOTAL" $(( prev / 60 )) $(( prev % 60 )) >&2
+}
+
+trap 'summary' EXIT
 
 [[ -n "${PROJECT_PATH}" ]] || fail "Usage: $0 <windows-wbpj-path> <system-name> (or set ANSYS_WORKBENCH_PROJECT_PATH / ANSYS_WORKBENCH_SYSTEM_NAME)"
 [[ -n "${SYSTEM_NAME}" ]] || fail "System name required. Unknown? Run this script once with any placeholder, then call GetAllSystems() via run_script_string over the Workbench port to discover it."
@@ -63,6 +106,7 @@ if command -v prlctl >/dev/null 2>&1; then
       || log "WARNING: VM is running, but the Parallels console could not be opened"
   fi
 fi
+mark "vm running"
 
 log "Waiting up to ${SSH_WAIT_SECONDS}s for passwordless SSH host '${SSH_HOST}'"
 SSH_READY=0
@@ -75,6 +119,7 @@ while (( SECONDS < SSH_DEADLINE )); do
   sleep 2
 done
 (( SSH_READY == 1 )) || fail "SSH did not become available within ${SSH_WAIT_SECONDS}s"
+mark "ssh reachable"
 
 log "Ensuring Workbench GUI is running with its project-schematic gRPC server on Windows port ${WB_GRPC_PORT}"
 # The bootstrap is copied and run with -File rather than piped into
@@ -95,9 +140,13 @@ scp -q "${WINDOWS_BOOTSTRAP}" "${SSH_HOST}:${REMOTE_BOOTSTRAP}" \
 # cmd.exe, which does not treat `;` as a separator, so it is glued onto the
 # last argument as "180;"). With -File and a valid path, a throw inside the
 # script already exits non-zero, which is what the `||` below relies on.
+# 2>&1 | stamp instead of >&2: the bootstrap's own progress lines are the only
+# view into the Windows-side waits, so they get elapsed-time prefixes too.
+# `set -o pipefail` (above) keeps the ssh exit code authoritative for the `||`.
 ssh -o BatchMode=yes "${SSH_HOST}" \
-  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS}" >&2 \
+  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS}" 2>&1 | stamp \
   || fail "Windows could not start or verify the Workbench gRPC server"
+mark "workbench grpc up"
 
 if ssh -S "${CONTROL_SOCKET}" -O check "${SSH_HOST}" >/dev/null 2>&1; then
   log "Reusing managed SSH control connection"
@@ -117,6 +166,7 @@ if ! lsof -nP -iTCP:"${WB_GRPC_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   ssh -S "${CONTROL_SOCKET}" -O forward -L "127.0.0.1:${WB_GRPC_PORT}:127.0.0.1:${WB_GRPC_PORT}" "${SSH_HOST}" \
     || fail "Could not forward the Workbench server port"
 fi
+mark "ssh tunnel established"
 
 # start_mechanical_server() is not idempotent: each call replaces the running
 # Mechanical process for that system, killing any session a client is already
@@ -134,6 +184,7 @@ mech = connect_to_mechanical(ip="127.0.0.1", port=int(sys.argv[1]), transport_mo
 mech.run_python_script("1")
 PYEOF
   then
+    mark "existing mechanical reused"
     print -- "Mechanical already reachable at 127.0.0.1:${MECH_LOCAL_PORT}; kept as-is (transport mode: insecure)"
     print -- "Set ANSYS_WORKBENCH_FORCE_RESTART=1 to replace it with a new server for system '${SYSTEM_NAME}'."
     exit 0
@@ -157,6 +208,7 @@ PYEOF
 )" || fail "PyWorkbench could not open the project or start the Mechanical server"
 
 [[ "${MECH_PORT}" == <1-65535> ]] || fail "Did not get a valid Mechanical port back from PyWorkbench (got: '${MECH_PORT}')"
+mark "project opened + mechanical started"
 log "Mechanical server for system '${SYSTEM_NAME}' is listening on Windows port ${MECH_PORT}"
 
 log "Remapping Windows port ${MECH_PORT} onto the standard local MCP endpoint 127.0.0.1:${MECH_LOCAL_PORT}"
@@ -191,5 +243,6 @@ while (( SECONDS < TUNNEL_DEADLINE )); do
   sleep 1
 done
 (( TUNNEL_READY == 1 )) || fail "Mechanical tunnel did not become reachable on 127.0.0.1:${MECH_LOCAL_PORT} within ${TUNNEL_WAIT_SECONDS}s"
+mark "mechanical port reachable"
 
 print -- "Mechanical (Workbench system '${SYSTEM_NAME}') ready at 127.0.0.1:${MECH_LOCAL_PORT} (transport mode: insecure)"

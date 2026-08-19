@@ -120,8 +120,21 @@ $licenseOk = $false
 $nudgedLicensing = $false
 # Give the daemons a grace period to appear by themselves before intervening;
 # restarting the service while something holds a licence throws error dialogs
-# in any running Ansys app.
-$nudgeAfter = (Get-Date).AddSeconds(90)
+# in any running Ansys app. That hazard only exists if an Ansys app is actually
+# running -- which on a cold boot it is not, since this script is what starts
+# the first one. A measured cold start spent 97s waiting here and then needed
+# 5s once the service was restarted, so the long grace period was almost pure
+# waste in exactly the case it could not protect. Keep it only when there is
+# something to protect.
+$ansysAppsRunning = @(Get-Process RunWB2, AnsysFWW, AnsysWBU -ErrorAction SilentlyContinue)
+if ($ansysAppsRunning.Count -gt 0) {
+    $nudgeGraceSeconds = 90
+    Write-Output "Ansys apps already running (licence holders possible); waiting $nudgeGraceSeconds s before touching the licensing service."
+} else {
+    $nudgeGraceSeconds = 10
+    Write-Output "No Ansys app running; licensing service may be restarted after $nudgeGraceSeconds s if the daemons are absent."
+}
+$nudgeAfter = (Get-Date).AddSeconds($nudgeGraceSeconds)
 while ((Get-Date) -lt $readinessDeadline) {
     if (-not $sessionOk) { $sessionOk = Test-InteractiveSession }
     if ($sessionOk -and (Test-NetworkReady) -and (Test-LicensingReady)) {
