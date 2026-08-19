@@ -1,0 +1,18 @@
+#!/bin/zsh
+
+# Start only the official stdio MCP server. Runtime prerequisites are handled
+# explicitly by ensure-ansys-mechanical-runtime so loading the global MCP does
+# not start Parallels or Mechanical as a side effect.
+
+set -eu
+
+SCRIPT_DIR="${0:A:h}"
+PROJECT_ROOT="${SCRIPT_DIR:h}"
+MCP_BIN="${PROJECT_ROOT}/.venv/bin/ansys-mechanical-mcp"
+
+if [[ ! -x "${MCP_BIN}" ]]; then
+  print -u2 -- "Official MCP executable not found: ${MCP_BIN}"
+  exit 1
+fi
+
+exec "${MCP_BIN}" "$@"

@@ -1,201 +1,113 @@
-# Two-Machine Development And Live Validation
+# Live validation workflow
 
 ## Purpose
 
-This project uses two distinct environments so that ordinary tests remain
-independent from Ansys while implemented behavior can still be checked against
-a real licensed Mechanical installation.
+Validate the official PyMechanical-MCP path without confusing package
+installation, TCP reachability, a PyMechanical connection, and an actual MCP
+tool round trip.
 
-| Environment | Authority | Allowed evidence |
+Each gate proves something different:
+
+| Gate | Evidence | Does not prove |
 | --- | --- | --- |
-| macOS development machine without Ansys | Source changes, fake/unit tests, documentation, commits, and pushes | Python tests, fake adapters, CLI behavior, and in-process MCP round trips |
-| Windows Mechanical validation machine | Licensed interactive read-only integration | Real GUI startup, product version, gRPC round trip, model inspection, selection payloads, and session reuse |
+| Installation | package versions, entry point, `pip check` | Mechanical is running |
+| Tunnel | `nc` reaches Mac loopback port | gRPC protocol compatibility |
+| PyMechanical | `is_alive`, product revision | Codex loaded the MCP server |
+| MCP startup | server visible in `/mcp` | a particular tool is safe/correct |
+| Tool round trip | structured result from official tool | untested mutations or solves |
 
-The development machine has no licensed Ansys Mechanical installation. A green
-test suite there does not prove that Mechanical starts, that a license is
-available, or that native selection proxies have the expected runtime shape.
-The Mechanical machine is an integration station, not the normal source-code
-workspace.
+## Preconditions
 
-Every machine-specific chat must identify its environment before acting:
+1. Use a harmless project with no unsaved productive work.
+2. Keep Parallels in Shared Network mode.
+3. Start Mechanical 2025 R1 with gRPC port `50053`.
+4. Confirm the Windows listener and firewall posture.
+5. Start the SSH tunnel with an explicit Mac loopback bind.
+6. Confirm the pinned local package versions and Codex registration.
 
-- macOS/Darwin without Mechanical means the **development role**;
-- Windows with the prepared licensed Mechanical installation means the
-  **validation role**.
+## Ordered checks
 
-If the observed operating system does not match the prompt's declared role,
-stop before installing, editing, pulling, or launching anything and ask for the
-correct handoff prompt. Operating system alone does not prove that a license or
-test project is available; the validation chat must still verify those
-preconditions.
+### 1. Installation
 
-## Normal Change Cycle
+```bash
+.venv/bin/python -VV
+.venv/bin/python -m pip show ansys-mechanical-mcp ansys-mechanical-core ansys-common-mcp
+.venv/bin/python -m pip check
+.venv/bin/ansys-mechanical-mcp --help
+codex mcp get ansys-mechanical
+```
 
-### 1. Develop without Ansys
+### 2. Tunnel
 
-On the development machine:
+```bash
+nc -vz 127.0.0.1 50053
+```
 
-1. Verify that the host is macOS/Darwin and that this is the development role.
-2. Read `AGENTS.md` and the relevant architecture and API research.
-3. Inspect Git status and preserve unrelated work.
-4. Fetch the configured remote and fast-forward the intended branch before
-   editing; stop on divergence or local conflicts instead of overwriting work.
-5. Verify API-dependent decisions against current official documentation.
-6. Implement the smallest relevant change.
-7. Add fake-based regression coverage, including negative paths.
-8. Run the repository test, lint, environment, and diff checks.
-9. State explicitly which behavior remains unvalidated against Mechanical.
-10. Commit only the scoped change and push the current branch without force.
-11. Produce a handoff prompt containing the exact branch and commit.
+Failure here is networking/process state. Do not debug it by changing MCP
+packages or model content.
 
-The development result is complete as an implementation result, but not as a
-licensed integration result.
+### 3. PyMechanical prerequisite
 
-### 2. Transfer an exact revision
+Use explicit `transport_mode="insecure"`, `cleanup_on_exit=False`, and a
+read-only property such as `is_alive` or `version`. Do not call `exit()` from
+the diagnostic.
 
-On the Mechanical validation machine:
+### 4. MCP visibility
 
-1. Verify that the host is Windows and that this is the validation role.
-2. Read `AGENTS.md`, this document, and the handoff prompt.
-3. Check Git status before fetching or changing branches.
-4. Preserve unrelated local changes; do not reset or overwrite them.
-5. Fetch the remote and use a fast-forward-only update where applicable.
-6. Verify that `HEAD` is the exact commit named in the handoff.
-7. Use only the repository `.venv`; never install project dependencies globally.
-8. Install or refresh the checked-out project and required extras in that
-   environment.
-9. Change only the registered MCP server configuration required by the tested
-   revision.
-10. Restart Codex or the relevant MCP client when the server process or its
-   configuration must be reloaded.
+Restart Codex/ChatGPT Desktop after MCP configuration changes. In a new task,
+inspect `/mcp` and confirm `ansys-mechanical` is active.
 
-Do not claim that a newly pulled implementation is live-valid until the MCP
-client has restarted and a real tool round trip has completed.
+### 5. Read-only official tool call
 
-### 3. Validate read-only behavior
+Call connection status first, then model information. State all prohibited
+actions in the request:
 
-Use only an empty project created for testing or an explicitly prepared,
-harmless test project. Never repurpose a productive Mechanical project.
+```text
+Use ansys-mechanical to check status and read the current model information.
+Do not solve, save, clear, upload, open, disconnect, close, run arbitrary code,
+or mutate anything.
+```
 
-The usual sequence is:
+Record the actual tool name, result, package versions, Mechanical revision,
+date, and whether the Mechanical GUI stayed open.
 
-1. Confirm that the expected MCP tools are registered.
-2. Call `check_environment`.
-   Treat `ansys-mechanical` and `mechanical-env` entries only as PyMechanical
-   Python CLI diagnostics. A launcher found beside `.venv\Scripts\python.exe`
-   is expected even when that directory is absent from `PATH`; it is not proof
-   of `AnsysWBU.exe`, a license, or a running server. `mechanical-env` is not
-   applicable on Windows.
-3. Call `inspect_mechanical_model` and observe whether the intended Mechanical
-   GUI starts or the configured server connection succeeds.
-4. Record actual product version, service pack when available, start/connect
-   mode, GUI/batch mode, ownership, cleanup policy, and the full structured
-   transport context: policy, requested/effective mode, security, connection
-   scope, selected/effective host, listener binding, executable/revision
-   preflight, detected and required SP, warnings, attempt count, and retry
-   state. Do not infer an installed SP number from the required SP; a detected
-   SP is valid only when the exact build metadata contained an explicit marker.
-5. After a local insecure start, inspect and display the exact listener address,
-   port, and owning process. Resolve the stop-or-explicit-experimental-acceptance
-   boundary below before making another Mechanical call.
-6. Call `inspect_mechanical_model` again only after that boundary permits it,
-   and verify that no second unnecessary Mechanical instance starts.
-7. If the GUI contains an empty project, stop and ask the operator to open the
-   prepared test project.
-8. Capture only the already implemented read-only selection cases. Ask the
-   operator before each manual selection change.
-9. Run opt-in integration tests only when their preconditions match the
-   prepared session.
+## Consequential validation
 
-No live-validation handoff authorizes model mutation, mesh generation, solve,
-new physics, named selections, highlighting, or target resolution.
+For a write, solve, file operation, or arbitrary script:
 
-Auto mode never starts a confirmed legacy SP insecurely. It first returns
-`MECHANICAL_INSECURE_TRANSPORT_OPT_IN_REQUIRED` with attempt count zero. After
-the operator persists explicit local `insecure`, verify the listening endpoint
-immediately with a read-only operating-system query. Record and show the exact
-local address, port, and owning process. The client target is loopback, but
-pre-secure Mechanical releases do not accept the newer `--grpc-host` flag and
-`selected_host=127.0.0.1` does not prove the actual listener binding.
+1. define the engineering objective and explicit non-goals;
+2. inspect the current project/model and units;
+3. preview exact code, target, file paths, and overwrite behavior;
+4. require explicit user authorization for the bounded action;
+5. execute once;
+6. inspect native state/results;
+7. record cleanup and any discrepancy.
 
-The recommended default is to stop if the listener is `0.0.0.0`, `::`, or any
-other non-loopback address. If a narrowly bounded experiment is useful, explain
-in plain language that the connection is unencrypted and unauthenticated and
-may be reachable through other interfaces, then ask the operator to explicitly
-accept that displayed risk for this one read-only test session. Do not continue
-without that confirmation, and never infer it from the `insecure` configuration
-alone.
+Do not retry a possibly mutating failure automatically.
 
-After explicit confirmation, the validation may continue only with the second
-inspect, session-reuse observation, a prepared harmless test project, read-only
-SelectionSnapshot cases, and optional connect-only integration tests. It must
-use a trusted or isolated development computer, no productive or confidential
-project, and no model mutation. Do not change firewall, Registry, or system
-configuration. Display the actual listener after every new start. Close
-Mechanical deliberately through the normal operator-controlled path after the
-test, then verify again that both the Mechanical process and tested listener
-are gone.
+## Shutdown
 
-Do not retry a failed start by repeatedly calling inspection. The manager
-latches a start failure for the lifetime of the MCP process because a failure
-after process creation can leave Mechanical running. Record whether any GUI or
-process exists, resolve configuration outside the model, restart Codex/MCP, and
-then make one new attempt. Connect-only failures may retry and never trigger an
-automatic insecure fallback.
+Official v0.2.0 may close Mechanical when the MCP process exits. Before a
+Codex/Desktop restart:
 
-### 4. Return evidence
+1. save or deliberately discard harmless Mechanical work;
+2. expect the GUI to close;
+3. restart Mechanical if needed;
+4. restart the SSH tunnel if its process changed;
+5. re-run the ordered gates rather than assuming the old connection survived.
 
-Report fake-tested and real Mechanical results in separate sections. For a live
-failure, retain at least:
+## Evidence contract
 
-- exact Mechanical version and service pack/build when observable;
-- PyMechanical version;
-- start or connect configuration, excluding secrets;
-- requested and effective transport information when available;
-- exact transport preflight and attempt context, including zero-launch legacy
-  opt-in evidence and the selected/effective state of any later explicit local
-  insecure run;
-- complete error code and message;
-- whether a GUI or process was created;
-- whether a retry created another process;
-- safe structured tool payloads and warnings;
-- exact reproduction order.
+Keep these categories separate:
 
-Do not edit project source on the Mechanical machine in the normal workflow.
-Send the evidence back to the development machine, add a fake reproducer there,
-implement the smallest correction, and repeat the cycle with a new commit.
+- installed package and Python facts;
+- Windows Mechanical/product facts;
+- network/tunnel facts;
+- official MCP startup facts;
+- exact tool-call results;
+- unvalidated assumptions;
+- mutations performed, if any;
+- process/listener/GUI cleanup.
 
-## Exceptional Integration Fixes
-
-Some defects depend on native Mechanical behavior and may be impractical to
-diagnose remotely. In that case the operator may explicitly authorize a narrow
-diagnostic branch on the Mechanical machine. Keep it isolated, add the same
-fake regression test, run normal checks, commit and push it, and synchronize it
-back to the development machine. This exception must not turn the licensed
-installation into an untracked primary workspace.
-
-## Handoff Contract
-
-Every development-to-validation handoff should identify:
-
-- repository and branch;
-- exact commit hash;
-- purpose and changed behavior;
-- fake/unit checks already completed;
-- behavior that still needs real validation;
-- required dependency or MCP configuration changes;
-- whether a Codex restart is required;
-- safe test-project preconditions;
-- expected tool sequence and data to record;
-- explicit prohibition of unrequested mutation;
-- instructions for returning evidence rather than silently patching locally.
-
-Use `docs/development-chat-prompt.md` to begin work on the Mac and
-`docs/next-chat-prompt.md` for the subsequent Windows validation handoff.
-Replace their placeholders with the actual revision and change-specific steps.
-
-For tracked work, the corresponding GitHub issue is the durable handoff record.
-Post the exact commit and development evidence before Windows starts, then post
-the live result and cleanup evidence back to the same issue. Follow
-`docs/github-development-workflow.md`; copied chat prompts are helpers, not the
-source of truth.
+Never cite the retired prototype's unit or integration tests as validation of
+the official package.

@@ -1,0 +1,107 @@
+#!/bin/zsh
+
+# One-shot workstation setup after cloning this repository on a Mac.
+#
+# Creates the Python environment, installs the pinned official packages,
+# reapplies the local MCP patch, and links the skill into the agents that use
+# it. Everything here is idempotent: re-running it repairs a partial setup
+# instead of duplicating it.
+#
+# What this script deliberately does NOT do, because it needs private material
+# or user decisions:
+#   * create the SSH key and the 'ansys-mechanical-vm' host alias
+#     (see docs/private-mac-parallels-mechanical-mcp-setup.md)
+#   * register the MCP server with an agent (printed as a final hint instead,
+#     since the exact command differs per agent and per install)
+#   * install Ansys itself in the Parallels VM
+
+set -eu
+set -o pipefail
+
+SCRIPT_DIR="${0:A:h}"
+REPO_DIR="${SCRIPT_DIR:h}"
+VENV_DIR="${REPO_DIR}/.venv"
+PYTHON_BASE="${ANSYS_MCP_PYTHON:-/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14}"
+
+log() { print -- "[bootstrap] $*"; }
+warn() { print -u2 -- "[bootstrap] WARNING: $*"; }
+fail() { print -u2 -- "[bootstrap] ERROR: $*"; exit 1; }
+
+# ---------------------------------------------------------------- environment
+if [[ ! -x "${PYTHON_BASE}" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    warn "${PYTHON_BASE} not found; falling back to $(command -v python3)"
+    PYTHON_BASE="$(command -v python3)"
+  else
+    fail "No usable Python found. Set ANSYS_MCP_PYTHON to a Python 3.12+ interpreter."
+  fi
+fi
+
+if [[ -x "${VENV_DIR}/bin/python" ]]; then
+  log "Reusing existing virtual environment: ${VENV_DIR}"
+else
+  log "Creating virtual environment with ${PYTHON_BASE}"
+  "${PYTHON_BASE}" -m venv "${VENV_DIR}" || fail "Could not create the virtual environment"
+fi
+
+log "Installing pinned requirements"
+"${VENV_DIR}/bin/python" -m pip install --upgrade pip --quiet || warn "pip self-upgrade failed; continuing"
+"${VENV_DIR}/bin/python" -m pip install -r "${REPO_DIR}/requirements-mac.txt" --quiet \
+  || fail "Dependency installation failed"
+"${VENV_DIR}/bin/python" -m pip check || warn "pip check reported conflicts (see output above)"
+
+# --------------------------------------------------------------------- patch
+# Must run after every install/upgrade: it edits site-packages, which pip
+# overwrites. See the script's own docstring for the rationale.
+log "Applying the remote-path patch to the official MCP"
+"${VENV_DIR}/bin/python" "${SCRIPT_DIR}/patch-mcp-remote-paths.py" \
+  || fail "Could not apply the remote-path patch"
+
+# --------------------------------------------------------------------- skill
+# Symlinked, not copied, so the repository stays the single source of truth
+# and every agent sees edits immediately.
+SKILL_SOURCE="${REPO_DIR}/skills/ansys-mechanical/SKILL.md"
+[[ -r "${SKILL_SOURCE}" ]] || fail "Skill file missing: ${SKILL_SOURCE}"
+
+for agent_dir in "${HOME}/.claude/skills" "${HOME}/.codex/skills"; do
+  agent_name="${agent_dir:h:t}"
+  if [[ ! -d "${agent_dir:h}" ]]; then
+    log "Skipping ${agent_name} (not installed)"
+    continue
+  fi
+  target_dir="${agent_dir}/ansys-mechanical"
+  mkdir -p "${target_dir}"
+  ln -sfn "${SKILL_SOURCE}" "${target_dir}/SKILL.md"
+  log "Linked skill for ${agent_name}: ${target_dir}/SKILL.md"
+done
+
+# ------------------------------------------------------------------ contract
+[[ -x "${SCRIPT_DIR}/start-ansys-mechanical-mcp" ]] \
+  || chmod +x "${SCRIPT_DIR}/start-ansys-mechanical-mcp" 2>/dev/null || true
+for runtime_script in ensure-ansys-mechanical-runtime ensure-ansys-workbench-mechanical-runtime; do
+  [[ -x "${SCRIPT_DIR}/${runtime_script}" ]] \
+    || chmod +x "${SCRIPT_DIR}/${runtime_script}" 2>/dev/null || true
+done
+
+[[ -x "${VENV_DIR}/bin/ansys-mechanical-mcp" ]] \
+  || fail "The official MCP executable is missing after installation"
+
+print -- ""
+log "Environment ready."
+print -- ""
+print -- "Remaining manual steps (need private material or an agent decision):"
+print -- ""
+print -- "  1. SSH access to the Windows VM: create the dedicated key and the"
+print -- "     'ansys-mechanical-vm' host alias in ~/.ssh/config."
+print -- "     See docs/private-mac-parallels-mechanical-mcp-setup.md"
+print -- ""
+print -- "  2. Register the MCP server with your agent, for example:"
+print -- ""
+print -- "       codex mcp add ansys-mechanical -- \\"
+print -- "         ${SCRIPT_DIR}/start-ansys-mechanical-mcp \\"
+print -- "         --ip 127.0.0.1 --port 50053 --transport-mode insecure"
+print -- ""
+print -- "     (Claude Code uses 'claude mcp add' with the same arguments.)"
+print -- ""
+print -- "  3. Verify: scripts/ensure-ansys-mechanical-runtime"
+print -- ""

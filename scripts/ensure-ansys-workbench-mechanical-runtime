@@ -1,0 +1,155 @@
+#!/bin/zsh
+
+# Explicitly prepare a Mechanical runtime that lives INSIDE an Ansys Workbench
+# project (Project Schematic), as opposed to ensure-ansys-mechanical-runtime
+# which starts Mechanical standalone. Both scripts share the same SSH
+# ControlMaster socket, so both routes are multiplexed over one SSH TCP
+# connection.
+#
+# Chain: Workbench GUI (gRPC "project server") -> start_mechanical_server()
+# for one named system -> that system's own Mechanical gRPC server -> remapped
+# onto the same local port (50053) that the official ansys-mechanical MCP is
+# already configured to use, so no MCP reconfiguration is needed.
+#
+# Requires ansys-workbench-core installed in <repository>/.venv
+# (pip install ansys-workbench-core).
+
+set -eu
+set -o pipefail
+
+SCRIPT_DIR="${0:A:h}"
+REPO_DIR="${SCRIPT_DIR:h}"
+WINDOWS_BOOTSTRAP="${SCRIPT_DIR}/windows/Start-AnsysWorkbenchGrpc.ps1"
+VENV_PYTHON="${REPO_DIR}/.venv/bin/python"
+
+SSH_HOST="${ANSYS_MECHANICAL_SSH_HOST:-ansys-mechanical-vm}"
+PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
+PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
+WB_GRPC_PORT="${ANSYS_WORKBENCH_GRPC_PORT:-51000}"
+MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
+SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
+WB_WAIT_SECONDS="${ANSYS_WORKBENCH_START_WAIT_SECONDS:-180}"
+TUNNEL_WAIT_SECONDS="${ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS:-30}"
+CONTROL_DIR="${TMPDIR:-/tmp}/ansys-mechanical-mcp-${UID}"
+CONTROL_SOCKET="${CONTROL_DIR}/ssh-control"
+
+# Windows path to the .wbpj to open, and the internal system name (from
+# GetAllSystems() inside Workbench -- NOT the schematic display letter such
+# as "B"; query it once with run_script_string if unknown).
+PROJECT_PATH="${1:-${ANSYS_WORKBENCH_PROJECT_PATH:-}}"
+SYSTEM_NAME="${2:-${ANSYS_WORKBENCH_SYSTEM_NAME:-}}"
+
+log() { print -u2 -- "[ansys-workbench-runtime] $*"; }
+fail() { log "ERROR: $*"; exit 1; }
+
+[[ -n "${PROJECT_PATH}" ]] || fail "Usage: $0 <windows-wbpj-path> <system-name> (or set ANSYS_WORKBENCH_PROJECT_PATH / ANSYS_WORKBENCH_SYSTEM_NAME)"
+[[ -n "${SYSTEM_NAME}" ]] || fail "System name required. Unknown? Run this script once with any placeholder, then call GetAllSystems() via run_script_string over the Workbench port to discover it."
+[[ -r "${WINDOWS_BOOTSTRAP}" ]] || fail "Windows bootstrap script not found: ${WINDOWS_BOOTSTRAP}"
+[[ -x "${VENV_PYTHON}" ]] || fail "venv python not found at ${VENV_PYTHON}; run 'pip install ansys-workbench-core' in it first"
+
+mkdir -p "${CONTROL_DIR}"
+chmod 700 "${HOME}/.ssh" "${CONTROL_DIR}"
+
+if command -v prlctl >/dev/null 2>&1; then
+  VM_STATUS="$(prlctl status "${PARALLELS_VM}" 2>/dev/null || true)"
+  if [[ "${VM_STATUS}" != *running* ]]; then
+    log "Starting Parallels VM: ${PARALLELS_VM}"
+    prlctl start "${PARALLELS_VM}" >&2 || fail "Could not start Parallels VM: ${PARALLELS_VM}"
+  else
+    log "Reusing running Parallels VM: ${PARALLELS_VM}"
+  fi
+  if [[ -d "${PARALLELS_VM_BUNDLE}" ]]; then
+    open -a "Parallels Desktop" "${PARALLELS_VM_BUNDLE}" >&2 \
+      || log "WARNING: VM is running, but the Parallels console could not be opened"
+  fi
+fi
+
+log "Waiting up to ${SSH_WAIT_SECONDS}s for passwordless SSH host '${SSH_HOST}'"
+SSH_READY=0
+SSH_DEADLINE=$(( SECONDS + SSH_WAIT_SECONDS ))
+while (( SECONDS < SSH_DEADLINE )); do
+  if ssh -o BatchMode=yes -o ConnectionAttempts=1 -o ConnectTimeout=1 "${SSH_HOST}" exit >/dev/null 2>&1; then
+    SSH_READY=1
+    break
+  fi
+  sleep 2
+done
+(( SSH_READY == 1 )) || fail "SSH did not become available within ${SSH_WAIT_SECONDS}s"
+
+log "Ensuring Workbench GUI is running with its project-schematic gRPC server on Windows port ${WB_GRPC_PORT}"
+ssh -o BatchMode=yes "${SSH_HOST}" \
+  "set ANSYS_WORKBENCH_GRPC_PORT=${WB_GRPC_PORT}&& set ANSYS_WORKBENCH_START_WAIT_SECONDS=${WB_WAIT_SECONDS}&& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" \
+  < "${WINDOWS_BOOTSTRAP}" >&2 \
+  || fail "Windows could not start or verify the Workbench gRPC server"
+
+if ssh -S "${CONTROL_SOCKET}" -O check "${SSH_HOST}" >/dev/null 2>&1; then
+  log "Reusing managed SSH control connection"
+else
+  log "Opening SSH control connection (bare master, forwards added on demand)"
+  ssh -M -S "${CONTROL_SOCKET}" -fN \
+    -o BatchMode=yes \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    "${SSH_HOST}" \
+    || fail "Could not establish the SSH control connection"
+fi
+
+if ! lsof -nP -iTCP:"${WB_GRPC_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  log "Forwarding Workbench server port 127.0.0.1:${WB_GRPC_PORT}"
+  ssh -S "${CONTROL_SOCKET}" -O forward -L "127.0.0.1:${WB_GRPC_PORT}:127.0.0.1:${WB_GRPC_PORT}" "${SSH_HOST}" \
+    || fail "Could not forward the Workbench server port"
+fi
+
+log "Opening project and starting the Mechanical server for system '${SYSTEM_NAME}' (this can take a minute)"
+MECH_PORT="$(
+  "${VENV_PYTHON}" - "${WB_GRPC_PORT}" "${PROJECT_PATH}" "${SYSTEM_NAME}" <<'PYEOF'
+import sys, warnings
+warnings.filterwarnings("ignore")
+from ansys.workbench.core import connect_workbench
+
+wb_port, project_path, system_name = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+wb = connect_workbench(port=wb_port, host="127.0.0.1", security="insecure")
+wb.run_script_string(f'Open(FilePath=r"{project_path}")')
+mech_port = wb.start_mechanical_server(system_name=system_name)
+print(mech_port)
+PYEOF
+)" || fail "PyWorkbench could not open the project or start the Mechanical server"
+
+[[ "${MECH_PORT}" == <1-65535> ]] || fail "Did not get a valid Mechanical port back from PyWorkbench (got: '${MECH_PORT}')"
+log "Mechanical server for system '${SYSTEM_NAME}' is listening on Windows port ${MECH_PORT}"
+
+log "Remapping Windows port ${MECH_PORT} onto the standard local MCP endpoint 127.0.0.1:${MECH_LOCAL_PORT}"
+# start_mechanical_server() can return a different remote port on every call
+# (Workbench replaces the per-system Mechanical process each time it's asked
+# to start one). `ssh -O cancel -L` requires the exact original bind+target
+# spec, so the previously forwarded remote port is tracked in a state file --
+# without this, a stale forward silently keeps serving a dead process instead
+# of erroring, which is worse than failing loudly.
+LAST_PORT_FILE="${CONTROL_DIR}/last-mech-port-${MECH_LOCAL_PORT}"
+if [[ -r "${LAST_PORT_FILE}" ]]; then
+  LAST_MECH_PORT="$(<"${LAST_PORT_FILE}")"
+  if [[ "${LAST_MECH_PORT}" == <1-65535> && "${LAST_MECH_PORT}" != "${MECH_PORT}" ]]; then
+    ssh -S "${CONTROL_SOCKET}" -O cancel -L "127.0.0.1:${MECH_LOCAL_PORT}:127.0.0.1:${LAST_MECH_PORT}" "${SSH_HOST}" >/dev/null 2>&1 || true
+  fi
+fi
+if ! lsof -nP -iTCP:"${MECH_LOCAL_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  ssh -S "${CONTROL_SOCKET}" -O forward -L "127.0.0.1:${MECH_LOCAL_PORT}:127.0.0.1:${MECH_PORT}" "${SSH_HOST}" \
+    || fail "Could not forward the Mechanical server port onto ${MECH_LOCAL_PORT}"
+elif [[ "${LAST_MECH_PORT:-}" != "${MECH_PORT}" ]]; then
+  fail "127.0.0.1:${MECH_LOCAL_PORT} is already bound and does not match the current Mechanical port ${MECH_PORT}. Cancel it manually (ssh -S ${CONTROL_SOCKET} -O cancel -L 127.0.0.1:${MECH_LOCAL_PORT}:127.0.0.1:<old-port> ${SSH_HOST}) or restart the SSH control connection."
+fi
+print -- "${MECH_PORT}" > "${LAST_PORT_FILE}"
+
+TUNNEL_READY=0
+TUNNEL_DEADLINE=$(( SECONDS + TUNNEL_WAIT_SECONDS ))
+while (( SECONDS < TUNNEL_DEADLINE )); do
+  if nc -z 127.0.0.1 "${MECH_LOCAL_PORT}" >/dev/null 2>&1; then
+    TUNNEL_READY=1
+    break
+  fi
+  sleep 1
+done
+(( TUNNEL_READY == 1 )) || fail "Mechanical tunnel did not become reachable on 127.0.0.1:${MECH_LOCAL_PORT} within ${TUNNEL_WAIT_SECONDS}s"
+
+print -- "Mechanical (Workbench system '${SYSTEM_NAME}') ready at 127.0.0.1:${MECH_LOCAL_PORT} (transport mode: insecure)"

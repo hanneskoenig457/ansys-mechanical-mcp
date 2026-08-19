@@ -1,44 +1,39 @@
-## Scope
+## Work contract
 
 Closes #
 
-Describe the single stage or prerequisite slice and its explicit non-goals.
+- Outcome:
+- Explicit non-goals:
+- Allowed/prohibited actions:
+- Confidential inputs committed: no
 
-## Safety And Engineering Assumptions
+## Change
 
-- Mutation boundary:
-- Units and model assumptions:
-- Confidential local inputs committed: no
-- Existing project/output overwrite possible: no
+Describe the reviewable artifact/diff and why this is the smallest useful
+stage.
 
-## macOS Development Evidence
+## Evidence
 
-- [ ] Unit/fake tests passed
-- [ ] In-process MCP tests passed where applicable
-- [ ] Ruff passed
-- [ ] Environment diagnostic passed
-- [ ] `git diff --check` passed
-
-Commands and results:
+- Local checks/reviews:
+- External or domain validation:
+- Exact artifact/commit handed to validation:
+- Remaining assumptions:
+- Cleanup/recovery evidence:
 
 ```text
-<paste concise evidence>
+Paste concise commands, measurements, or review results.
 ```
 
-## Windows Mechanical Evidence
+## Handoff
 
-- Exact commit for validation: `<full SHA or pending>`
-- Mechanical/PyMechanical version: `<version or pending>`
-- Live tool sequence and structured evidence: `<evidence or pending>`
-- GUI/process/listener cleanup: `<evidence or pending>`
-- [ ] Required licensed validation passed
-- [ ] No Windows source edits were needed
+- Next responsible role/environment:
+- Durable issue comment posted:
+- Copy-ready next prompt:
 
-Fake tests do not satisfy the Windows checklist. If live validation is not
-required for this PR, explain why:
+## Checklist
 
-## Documentation And Handoff
-
-- [ ] Relevant roadmap/API/architecture documentation updated
-- [ ] Stage issue contains branch, exact commit, and remaining live assumptions
-- [ ] No CAD, `.mechdb`, Workbench hierarchy, or solver output is present in the diff
+- [ ] The diff contains only the issue scope.
+- [ ] Documentation and AI instructions match current behavior.
+- [ ] Synthetic/inferred evidence is separated from real validation.
+- [ ] No secrets, CAD, Mechanical databases, or solver output are committed.
+- [ ] A merged PR will not be treated as external validation unless that gate is recorded above.

@@ -1,164 +1,378 @@
-# GitHub Development And Machine Handoff
+# Reusable GitHub project operating system
 
-## Source Of Truth
+This document defines a project method that can be copied into a new software,
+engineering, research, documentation, or creative project. It is designed for
+human/AI collaboration where work must remain reviewable across chats,
+machines, tools, and time.
 
-GitHub issues are the durable work orders and evidence records for this
-repository. Chat messages and copied prompts may help start a session, but they
-must not be the only location of scope, dependencies, acceptance criteria, or
-live-validation results.
+The central idea is simple:
 
-The steady-state thermal parent issue owns the ordered roadmap. Each stage has
-one child issue and normally one implementation pull request. The repository
-documentation defines the invariant rules; issue bodies define the current
-stage; comments carry timestamped handoff evidence.
+> The repository stores durable knowledge, issues store work contracts, pull
+> requests store reviewable changes, and project statuses store evidence gates.
+> Chat is an execution interface, not the sole source of truth.
 
-## Machine Roles And Statuses
+## 1. Information architecture
 
-Use these handoff states in the GitHub Project field named `Handoff`:
+Use each artifact for one job:
 
-| State | Meaning | Responsible environment |
+| Artifact | Purpose |
+| --- | --- |
+| `README.md` | Current purpose, status, entry points, and how to begin |
+| `AGENTS.md` | Persistent operating instructions for AI agents |
+| `docs/architecture.md` | System boundaries and durable decisions |
+| `docs/roadmap.md` | Ordered outcomes and decision gates |
+| GitHub parent issue | Initiative/epic, dependencies, and stage order |
+| GitHub child issue | One executable work contract |
+| Branch | Isolated implementation of one work contract |
+| Pull request | Review, evidence, discussion, and merge gate |
+| GitHub Project | Portfolio view and handoff state |
+| Issue comments | Timestamped evidence and handoffs |
+| Final chat response | Immediate, copy-ready handoff for the operator |
+
+Do not duplicate the same changing truth in five places. Stable rules belong in
+the repository. Current scope and acceptance criteria belong in the issue.
+Evidence belongs in the PR/issue. The Project summarizes state.
+
+## 2. Project startup
+
+### 2.0 Verify GitHub access
+
+Before relying on CLI automation, check:
+
+```bash
+git remote -v
+gh auth status
+```
+
+If the GitHub CLI token is missing or invalid, reauthenticate interactively:
+
+```bash
+gh auth login -h github.com
+```
+
+Do not place GitHub tokens in repository files, issue bodies, prompts, or shell
+history. A working Git remote does not prove that `gh` API authentication is
+valid; verify both separately.
+
+### 2.1 Define the project contract
+
+Before implementation, record:
+
+- desired outcome and why it matters;
+- users/stakeholders;
+- explicit non-goals;
+- constraints, risks, confidential inputs, and safety boundaries;
+- evidence that will count as success;
+- decisions that are reversible versus expensive to reverse;
+- known external dependencies and validation environments.
+
+Put the short version in `README.md`, AI operating rules in `AGENTS.md`, and
+long-lived design decisions in `docs/`.
+
+### 2.2 Build an outcome roadmap
+
+Create one parent issue for the initiative and child issues for the smallest
+independently reviewable stages. Order by dependency and learning value, not by
+the apparent order in which someone first imagined the final product.
+
+A good early stage reduces a major uncertainty. It does not merely create
+scaffolding.
+
+### 2.3 Configure a GitHub Project
+
+Recommended fields:
+
+| Field | Example values |
+| --- | --- |
+| Status | Backlog, Ready, In progress, In review, Done |
+| Handoff | None, Ready for implementation, Ready for validation, Blocked |
+| Priority | P0, P1, P2, P3 |
+| Type | Research, Feature, Documentation, Validation, Decision |
+| Area | Project-specific subsystem/domain |
+| Validation | Not required, Pending, Passed, Failed |
+
+Use as few fields as possible while preserving decisions people actually make.
+
+## 3. Evidence-gated statuses
+
+Statuses must describe what evidence exists, not a subjective percentage:
+
+| State | Entry condition | Exit evidence |
 | --- | --- | --- |
-| `Backlog` | Ordered but not ready; a dependency is open | Neither |
-| `Ready for Mac` | Scope and dependencies are complete | macOS development machine |
-| `In Development` | Branch exists and implementation/tests are in progress | macOS development machine |
-| `Ready for Windows` | Reviewed exact commit is available for licensed validation | Windows Mechanical machine |
-| `In Validation` | Exact commit and prerequisites are being checked live | Windows Mechanical machine |
-| `Done` | Development and required Windows gates both passed | Neither |
+| `Backlog` | Valuable but not ready or dependency open | Dependency resolved and issue contract reviewed |
+| `Ready` | Scope, owner/agent, inputs, and acceptance criteria exist | Work branch or active execution begins |
+| `In progress` | Implementation/research is active | Deliverable and local checks are ready for review |
+| `In review` | PR/deliverable is reviewable | Review and required validation pass |
+| `Ready for validation` | Exact artifact/revision handed to another environment/person | Validation evidence returned |
+| `Blocked` | Specific external decision/input prevents progress | Blocking condition changes |
+| `Done` | All required evidence gates pass | Terminal state |
 
-Only Stage 1 becomes `Ready for Mac` initially. A later stage remains `Backlog`
-until its predecessor is `Done` and its own issue contract is reviewed. Status
-changes are meaningful handoffs, not estimates of percent complete.
+Do not mark work `Done` because a chat ended, code compiled, a PR merged, or an
+AI claimed confidence. Define the required evidence explicitly.
 
-## Issue Contract
+## 4. Work-item issue contract
 
-Every stage issue must identify:
+Every executable child issue should contain:
 
-- parent roadmap and predecessor dependency;
-- engineering objective and explicit non-goals;
-- mutation and safety boundary;
-- intended MCP/API contract;
-- macOS implementation and fake-test acceptance criteria;
-- Windows live prerequisites, steps, acceptance criteria, and cleanup;
-- required documentation changes;
-- current branch, exact commit, pull request, and evidence links.
+### Context
 
-Use `.github/ISSUE_TEMPLATE/thermal-stage.yml` for additional stages or
-follow-up slices. Never paste confidential CAD or solver artifacts into an
-issue. Safe evidence means structured text with sensitive paths and geometry
-details minimized.
+- parent initiative;
+- predecessor/dependency links;
+- problem or opportunity;
+- current evidence and relevant decisions.
 
-## Branch And Pull Request Contract
+### Objective
 
-Normal implementation work starts on the Mac from an up-to-date `main`:
+- one concrete outcome;
+- user/stakeholder value;
+- why this is the next useful slice.
+
+### Scope
+
+- required deliverables;
+- explicit non-goals;
+- allowed and prohibited mutations/actions;
+- input/output and confidentiality boundary.
+
+### Acceptance criteria
+
+- observable pass/fail statements;
+- required tests, reviews, measurements, or human decisions;
+- required documentation and cleanup;
+- environment-specific gates.
+
+### Handoff
+
+- responsible next role/environment;
+- exact branch, commit, document version, dataset, or artifact;
+- copy-ready next prompt/instructions;
+- unresolved assumptions.
+
+If the issue cannot state these clearly, it is still discovery work. Create a
+bounded research/decision issue rather than pretending implementation is ready.
+
+## 5. Branch and pull-request contract
+
+Use one branch and normally one PR per child issue:
 
 ```text
-agent/thermal-stage-<n>-<short-purpose>
+codex/<issue-number>-<short-purpose>
 ```
 
-One pull request should close one stage issue unless the issue explicitly
-defines smaller prerequisite PRs. The pull request remains draft while the Mac
-gate is incomplete. Before Windows handoff it records the exact head commit,
-all non-live checks, and all remaining live assumptions.
+Keep the PR draft until its implementation gate is complete. The PR should
+state:
 
-Do not force-push a commit already handed to Windows. If development changes,
-post a new exact commit and invalidate the earlier validation target. Do not
-merge a stage as functionally complete until the required Windows evidence is
-attached. Documentation/tracking PRs that contain no Mechanical feature may be
-merged after their ordinary CI and review gate.
+- issue closed or advanced;
+- exact scope and non-goals;
+- safety/data assumptions;
+- changed artifacts;
+- checks performed and their results;
+- evidence still missing;
+- exact artifact/revision for external validation;
+- rollback or recovery path where relevant.
 
-## Handoff Comment Templates
+Do not force-push an exact commit already handed to validation. If it changes,
+post the replacement commit and explicitly invalidate the former target.
 
-### Dual delivery requirement
+A merged PR proves integration into the repository. It does not automatically
+prove domain correctness, licensed-runtime behavior, field validation, user
+acceptance, or deployment success.
 
-Every completed or blocked machine gate must deliver its handoff twice:
+## 6. Multiple environments and roles
 
-1. Post the durable evidence, exact commit, status, and next-machine prompt to
-   the stage issue.
-2. Show the same short, fully copyable prompt directly in the final chat
-   response to the operator.
+Many projects have evidence that can only be produced elsewhere:
 
-The final response must name the issue, result, next responsible machine, and
-exact commit when one exists. It must not merely say that a prompt was posted
-on GitHub or require the operator to open a comment to retrieve it. GitHub is
-the durable source of truth; the chat response is the immediately visible
-handoff.
+- development machine versus licensed test machine;
+- synthetic data versus confidential production data;
+- lab bench versus design workstation;
+- draft author versus legal/domain reviewer;
+- simulation versus physical experiment;
+- offline analysis versus deployed system.
 
-Development-to-Windows:
+Define each environment's authority:
+
+| Environment/role | May change | May validate | Must not claim |
+| --- | --- | --- | --- |
+| Implementation | Source/artifacts and local tests | Internal consistency and fake/synthetic cases | External-runtime or field success |
+| Validation | Normally configuration/test inputs only | Real environment behavior | Unreviewed implementation changes |
+| Reviewer/approver | Acceptance decision | Fit to contract and evidence quality | Results not present in evidence |
+
+Keep synthetic, inferred, and real-world results explicitly separated.
+
+## 7. Handoff protocol
+
+Every handoff must be delivered twice:
+
+1. durable record in the GitHub issue/PR;
+2. short, fully copyable instructions in the final chat response.
+
+This avoids two failure modes: chat-only knowledge disappears, while
+issue-only instructions are easy for the operator to miss.
+
+### Implementation-to-validation template
 
 ```markdown
-## Ready for Windows
+## Ready for validation
 
+- Issue: #<number>
 - Branch: `<branch>`
-- Commit: `<full SHA>`
-- PR: #<number>
-- Mac checks: `<commands and results>`
-- Not live validated: `<assumptions>`
-- Local input/output prerequisites: `<safe relative details>`
-- Allowed mutation: `<exactly bounded action>`
-- Tool order: `<ordered calls>`
-- Expected evidence: `<fields and cleanup proof>`
+- Exact artifact/commit: `<identifier>`
+- Implemented scope: `<summary>`
+- Checks already passed: `<commands/reviews/results>`
+- Not yet validated: `<assumptions>`
+- Validation inputs/environment: `<safe details>`
+- Allowed actions: `<bounded actions>`
+- Prohibited actions: `<non-goals>`
+- Expected evidence: `<fields, measurements, cleanup>`
+- Next prompt: `<copy-ready instruction>`
 ```
 
-Windows-to-development:
+### Validation-to-implementation template
 
 ```markdown
-## Windows evidence
+## Validation evidence
 
-- Commit validated: `<full SHA>`
-- Mechanical/PyMechanical: `<versions>`
-- Session/transport: `<safe structured summary>`
-- Tool results: `<safe structured evidence>`
-- GUI/process/listener before and after: `<evidence>`
-- Result: `passed | failed | blocked`
-- Reproduction/discrepancy: `<exact order and error>`
-- Source changed on Windows: `no` (normal path)
+- Issue: #<number>
+- Exact artifact/commit tested: `<identifier>`
+- Environment/version: `<facts>`
+- Procedure: `<ordered steps>`
+- Observed result: `<safe evidence>`
+- Cleanup/recovery: `<result>`
+- Outcome: `passed | failed | blocked`
+- Discrepancy/reproduction: `<details>`
+- Source/artifact changed during validation: `no` (normal path)
+- Next prompt: `<copy-ready instruction>`
 ```
 
-## Automation Boundary
+## 8. AI-agent operating rules
 
-Automation may create the roadmap, add issues to the project, populate labels,
-check required fields, and move an item after objective repository events.
+Put a concise version of these rules in `AGENTS.md`:
+
+1. Read the named issue and repository instructions before acting.
+2. Verify repository/machine/environment role.
+3. Inspect Git status and preserve unrelated work.
+4. Work only inside the issue scope and explicit authority boundary.
+5. Verify unstable facts against primary sources.
+6. Distinguish read-only diagnostics from mutations.
+7. Add proportionate tests/evidence and record what remains unknown.
+8. Never invent external validation or domain results.
+9. Avoid force-pushes and destructive cleanup.
+10. Update the durable issue and repeat the handoff in the final response.
+
+### Minimal new-task starter
+
+After the repository and issue contract are mature, a new AI chat should need
+only:
+
+```text
+Work on GitHub issue #<number> in this repository. Read AGENTS.md, the issue
+body, dependencies, and latest handoff comments first. Verify the current
+environment/role, preserve unrelated changes, execute only the issue scope,
+record evidence in the issue, and include the copy-ready next handoff in the
+final response.
+```
+
+If this prompt is insufficient, improve the repository/issue contract instead
+of repeatedly writing longer disposable chat prompts.
+
+## 9. Automation boundary
+
+Automation may:
+
+- apply labels and add issues to a Project;
+- validate that required issue fields are present;
+- link PRs/issues and update status from objective repository events;
+- remind owners about missing evidence;
+- run deterministic tests and formatting checks.
+
 Automation must not:
 
-- infer successful licensed validation from CI;
-- move an item to `Done` merely because a PR merged;
-- expose or upload local CAD/results;
-- trigger Mechanical model mutations unattended;
-- replace the exact-commit handoff with a moving branch name.
+- infer domain or licensed validation from CI;
+- mark `Done` merely because an issue closed or PR merged;
+- expose confidential inputs/results;
+- trigger consequential physical/engineering mutations unattended;
+- replace exact-artifact handoffs with moving branch names;
+- manufacture acceptance evidence.
 
-The repository templates make the workflow reproducible on both machines even
-when GitHub Project automation is unavailable. `docs/live-validation-workflow.md`
-remains authoritative for Mechanical session and listener safety.
+Automate clerical consistency. Keep judgment and consequential authorization
+explicit.
 
-New issues created through the thermal issue form are automatically labelled
+## 10. Non-software projects
 
-- `area:thermal`;
-- `handoff:backlog`;
-- `validation:windows-required`.
+The same structure works outside code:
 
-Handoff labels are otherwise changed deliberately when their evidence gate is
-met. The workflow never infers `Done` from a close or merge event.
+| Software term | General project equivalent |
+| --- | --- |
+| Source file | Document, CAD model, dataset, plan, design asset |
+| Test | Review checklist, measurement, experiment, simulation, rehearsal |
+| Pull request | Controlled proposal/diff for review |
+| Deployment | Publication, manufacturing release, field use, stakeholder delivery |
+| Runtime validation | Lab test, stakeholder approval, legal check, real-data trial |
+| Rollback | Restore prior approved artifact/version |
 
-## Minimal Session Starters
+The essential pattern is still: bounded work contract, isolated change,
+reviewable diff, explicit evidence, exact handoff, and durable history.
 
-After the tracking PR is merged, a new Codex session should need only the issue
-number and machine role. For example:
+## 11. Decision records
 
-```text
-Mac: Synchronisiere ansys-mechanical-mcp und bearbeite Issue #<n> gemäß
-AGENTS.md und den verlinkten Repository-Dokumenten. Lies Issue-Body und aktuelle
-Handoff-Kommentare selbst; implementiere nur den Mac-Gate-Scope.
+For decisions that are expensive to reverse, record a short decision document:
 
-Windows: Synchronisiere ansys-mechanical-mcp auf den exakten in Issue #<n>
-genannten Commit und führe ausschließlich dessen Windows-Gate gemäß AGENTS.md
-und docs/live-validation-workflow.md aus. Poste die sichere Evidenz zurück ins
-Issue; ändere im Normalfall keinen Quellcode.
+```markdown
+# Decision: <title>
+
+- Status: proposed | accepted | superseded
+- Date:
+- Context:
+- Decision:
+- Alternatives considered:
+- Consequences:
+- Evidence that would trigger reconsideration:
 ```
 
-The operator therefore coordinates by issue number and explicit machine role;
-the issue and repository supply the detailed instructions.
+Do not turn every small preference into bureaucracy. Record decisions when
+future contributors would otherwise reopen the same trade-off without context.
 
-At the end of the current chat, the responsible agent repeats the applicable
-starter block in its final response with the real issue number and, for a
-Windows handoff, the exact validated target commit already recorded in the
-issue.
+## 12. Retrospective loop
+
+After each stage, ask:
+
+- Which assumption was wrong?
+- Which evidence was most useful?
+- What information was missing at handoff?
+- Which repeated instruction belongs in `AGENTS.md`, a template, or a skill?
+- Which process step added no value and should be removed?
+- What should the next smallest uncertainty-reducing stage be?
+
+Update the system from real friction. This is the “learning by doing” loop that
+turns one project's workflow into a reusable method.
+
+## 13. Packaging this method as a Codex skill
+
+The method is a good skill candidate because it contains a repeatable workflow
+and non-obvious handoff/evidence rules. A lean skill should contain:
+
+```text
+operate-github-project/
+  SKILL.md
+  agents/openai.yaml
+  references/
+    github-project-operating-system.md
+```
+
+`SKILL.md` should stay short and instruct the agent to:
+
+- inspect or initialize the project's durable information architecture;
+- create/review issue contracts and evidence-gated statuses;
+- preserve exact handoffs across chats/environments;
+- read the bundled reference when detailed templates are needed.
+
+Do not put project-specific Ansys facts into the generic skill. Keep those in
+this repository's `AGENTS.md` and Mechanical documentation.
+
+Before creating the actual skill, choose whether it should be:
+
+- global/personal under `~/.codex/skills` for every project; or
+- project-local for testing and iteration before wider reuse.
+
+The recommended path is project-local drafting, one or two real uses, then a
+global personal skill after the method proves stable.

@@ -1,153 +1,113 @@
-# Architecture
+# Deployment architecture
 
-The server should be organized as a small set of product adapters plus workflow tools.
+## Decision
 
-## Layers
+Use the official Ansys PyMechanical-MCP server as the Mechanical integration
+layer. This repository supplies deployment, safety, validation, and
+application-level workflow material around it; it does not implement another
+MCP server.
+
+## Runtime topology
 
 ```text
-MCP client
-  |
-  v
-MCP server entrypoint
-  |
-  +-- FastMCP v1 lifespan: one lazy Mechanical application context (stdio)
-  |     |
-  |     +-- existing MechanicalSessionManager: start/connect, ownership, cleanup
-  |
-  +-- core: errors, tool results, product-neutral SelectionSnapshot
-  |
-  +-- products/mechanical: PyMechanical session, inspection, selection capture
-  |     |
-  |     +-- exact-executable gRPC transport preflight and safety policy
-  |
-  +-- products/dpf: PyDPF result extraction
-  |
-  +-- workflows/static_structural: higher-level workflow operations
-  |
-  +-- later selection stages: optional describe, then resolve/validate before mutation
+Natural-language request
+        |
+        v
+Codex / ChatGPT Desktop on macOS
+        |
+        | starts immediately; no VM side effects
+        v
+official ansys-mechanical-mcp in <repository>/.venv
+        |
+        | PyMechanical: try 127.0.0.1:50053
+        v
+global skill runs explicit runtime starter only if unavailable
+        |
+        | starts/verifies VM, Windows task, and SSH tunnel
+        v
+Mac SSH tunnel entrance at 127.0.0.1:50053
+        |
+        | encrypted SSH through Parallels Shared Network
+        v
+Windows 127.0.0.1:50053
+        |
+        v
+Ansys Mechanical 2025 R1 gRPC service
 ```
 
-## Design Intent
+The MCP protocol and Mechanical gRPC are separate transports. Codex launches a
+small side-effect-free script that immediately replaces itself with the
+official MCP server. When a real Mechanical request cannot connect to the Mac
+loopback endpoint, the global skill runs the separate runtime starter. That
+starter prepares the VM, Windows task, and tunnel but does not start or stop
+the MCP process. The MCP then connects through PyMechanical to the loopback
+port, which SSH forwards into Windows.
 
-Use product-specific adapters for low-level operations and workflow modules for higher-level actions. This keeps later Workbench, Geometry, MAPDL, or Fluent support possible without turning the server into one large file.
-
-For selection-aware interaction, the native CAE adapter remains the source of
-truth. Mechanical supplies entity IDs and model relationships, and the MCP
-layer normalizes that context into a revision-scoped snapshot. Semantic
-explanation is an optional consumer of that snapshot, not a requirement for
-selection capture. Mechanical resolves and validates the target again before
-any later change is applied.
-
-The responsibility boundaries are:
+## Responsibility boundaries
 
 | Concern | Authority |
 | --- | --- |
-| Existing native CAD parameters and feature history | The originating CAD or prepared Workbench parameter pipeline |
-| Executable CAE selection, model objects, mesh, loads, solve, and results | The target CAE application; Mechanical first |
-| Structured transport of selection facts and action intent | Product-neutral MCP contracts |
-| Engineering interpretation and proposals | Optional semantic orchestration, clearly separated from facts |
-| Independent geometry generation or external picking | Optional later build123d/OpenCascade service |
+| MCP tools and lifecycle | Official `ansys-mechanical-mcp` package |
+| Mechanical connection and scripting | Official PyMechanical package |
+| Model state, solve, results, and entity identity | Running Mechanical instance |
+| Cross-machine confidentiality | SSH tunnel plus VM/firewall containment |
+| Runtime bootstrap | Explicit repository starter and interactive Windows scheduled task |
+| Cross-project operating order | Global personal `ansys-mechanical` skill |
+| Codex server registration | User-level Codex configuration |
+| Setup, validation, prompts, and project method | This repository |
+| Secrets and private machine values | Local ignored files and OS credential stores |
 
-An external viewer can therefore become another selection input, but it does
-not become the authority for Mechanical topology. Its selection intent must be
-resolved, highlighted, and validated by the Mechanical adapter.
-
-The contracts, safety rules, and native-first decision are described
-in [Selection Context and Semantic CAE Interaction](selection-context-architecture.md).
-
-## Implemented Mechanical Application Context
-
-The stable MCP Python SDK v1 lifespan yields one
-`MechanicalApplicationContext` for the stdio server run. It owns the existing
-`MechanicalSessionManager`, not a second session mechanism. Session creation is
-lazy so `check_environment` never imports or starts PyMechanical. Mechanical
-operations are serialized because MCP request handlers can run concurrently and
-the Mechanical scripting API is not treated as thread-safe. Blocking
-PyMechanical calls and cleanup run in worker threads so they do not block the
-MCP event loop; shutdown cleanup is cancellation-shielded.
-
-`inspect_mechanical_model` may establish an explicitly configured start/connect session.
-`capture_current_selection` reuses it; in connect mode it may establish only the
-connection to a server explicitly declared GUI-capable. In start mode capture
-never launches a new empty instance. Shutdown follows the configured ownership
-policy and the manager's `close()` path is idempotent after success and retains
-the handle for a retry after failure. Configuration is immutable. Started UI
-sessions and connected sessions remain running by default; only started
-headless sessions default to force-cleanup.
-
-The Mechanical gRPC policy is separate from the MCP stdio transport. Start and
-connect remain explicit; `auto` only decides the Mechanical gRPC mode after that
-product/session choice is known. For a local start, the manager resolves the
-exact executable, derives its revision, checks PyMechanical's documented
-service-pack capability against that executable's build metadata, and then
-makes at most one `launch_mechanical()` call. Confirmed compatible Windows/Linux
-starts use WNUA/mTLS respectively. A confirmed incompatible local legacy SP
-returns a structured insecure-opt-in error with zero launch calls. The operator
-may persist an explicit local `insecure` choice; its unverified legacy listener
-binding remains visible and requires an OS-level live check. Unknown or
-conflicting evidence stops auto mode before launch. Every local start requires
-a validated exact executable, so this path cannot delegate implicitly to PyPIM.
-
-PyMechanical 0.12.12 has no documented legacy alternative to the newer
-`--grpc-host` binding argument. For Mechanical 2025 R1 SP03 build
-`R251RC2P03`, returned Windows evidence showed that an explicit-insecure start
-and first inspection worked, but the actual port-10000 listener was bound to
-`::` even though the selected and effective client host was `127.0.0.1`.
-Session context therefore treats those host fields as client targets rather
-than listener-binding proof. Its warnings name possible `0.0.0.0`/`::`
-bindings, unauthenticated and unencrypted exposure, and the required post-start
-OS check. The broad binding is live evidence for that build only; similar risk
-on other below-threshold releases remains a precautionary assumption.
-
-There is no exception-driven start fallback. PyMechanical reserves its port
-before the known compatibility exception and other exceptions can occur after
-process creation. A failed start is therefore latched for the MCP process; a
-second inspection returns the same structured error without another launch.
-An operator resolves the cause and restarts MCP. Successful sessions retain the
-existing reuse semantics. Connect failures can retry because connect mode does
-not create a Mechanical process.
-
-Connect mode cannot inspect the remote server's version/SP before agreeing on a
-transport. It never changes from secure to insecure automatically. Explicit
-loopback hosts use the secure platform default; other hosts default to mTLS.
-WNUA is Windows-only and restricted to PyMechanical's accepted localhost
-endpoints. Insecure non-loopback transport requires a separate explicit
-acknowledgement. Hostnames are not resolved through DNS to justify an insecure
-classification. An omitted connect host is pinned explicitly rather than
-inherited from `PYMECHANICAL_IP`.
-
-The manager exposes immutable configuration plus dynamic preflight, selected
-versus established transport/host, security, connection scope, listener-binding
-evidence, warnings, attempt count, and retry state as JSON-compatible session
-context. Inspection adds this context to its result; selection obtains it after
-any first connection so it is not stale.
-
-Mechanical tool failures retain the common structured `ToolResult` payload and
-set MCP `CallToolResult.isError=true`. The controlled scripts execute their
-helpers in a uniquely named self-cleaning function scope, and selection arrays
-are bounded before JSON serialization.
-
-Stable MCP v1 HTTP lifespans are scoped per session (or per request in stateless
-mode), so this process-wide Mechanical lifecycle is currently supported only
-over stdio. Both CLI and programmatic HTTP/SSE entry points reject unsupported
-transports. Expanding transport support requires a separate lifecycle decision,
-not silent per-request Mechanical creation.
-
-## Extension Path
-
-Future adapters can be added under `products/`:
+## State and persistence
 
 ```text
-products/workbench/
-products/geometry/
-products/mapdl/
-products/fluent/
+Repository files       durable, version controlled
+Private setup guide    durable, local, ignored by Git
+.venv                  durable, local, reproducible, ignored by Git
+Codex MCP entry        durable user configuration
+SSH alias/key          durable user configuration, outside Git
+Windows start task     durable after first successful bootstrap
+Mechanical process     runtime only
+SSH tunnel process     runtime only, recreated by explicit starter
+MCP stdio process      runtime only, owned by Codex
 ```
 
-These should not be added as empty fake tool modules. Add them only when a real workflow needs them.
+The same local address does not imply the same computer. `127.0.0.1` on macOS
+is the SSH tunnel entrance; `127.0.0.1` in the forwarding destination is
+Windows loopback.
 
-A neutral geometry viewer and a build123d-based CAD preprocessor are two
-different optional extensions, neither of which is a prerequisite for
-Mechanical selection context. Introduce either role only after the native
-prototype demonstrates a concrete cross-tool, offline-geometry, or
-geometry-generation need.
+## Security boundary
+
+Mechanical 2025 R1 without SP04 cannot use the newer secure gRPC modes. This
+deployment accepts explicit `insecure` gRPC only because:
+
+1. the Mac endpoint is bound to `127.0.0.1`;
+2. the forwarding destination is Windows `127.0.0.1`;
+3. the cross-machine hop is encrypted by SSH;
+4. Parallels remains in Shared Network mode;
+5. no Windows firewall opening is created for the Mechanical port.
+
+This is a private development topology, not a general remote-service design.
+
+## Lifecycle caveat
+
+PyMechanical-MCP 0.2.0 connects with `cleanup_on_exit=False`, but its MCP
+product cleanup subsequently calls `Mechanical.exit()` when a connection is
+present. Therefore stopping or restarting Codex's MCP process can close the
+Mechanical application. The operator must save or discard work deliberately
+before restarting the full stack.
+
+## Extension rule
+
+Add repository content only when it supports one of these roles:
+
+- reproducible installation or diagnostics;
+- safety-bounded Mechanical operation;
+- reusable prompts/scripts for an engineering workflow;
+- validation evidence and regression procedures;
+- project-management templates or AI operating instructions.
+
+Do not recreate tools already supplied by the official package merely to keep
+the old source layout alive. If an official tool has a concrete gap, first
+document the missing behavior and reproduce it against the installed version;
+then decide whether the right result is an upstream issue, an application-level
+script, or a separate extension project.

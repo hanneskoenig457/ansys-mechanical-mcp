@@ -1,0 +1,71 @@
+name: Reviewable project work item
+description: Define one bounded, evidence-gated project stage.
+title: "[Work Item] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Create one independently reviewable outcome. Do not attach secrets,
+        credentials, confidential engineering data, or generated solver files.
+  - type: input
+    id: parent
+    attributes:
+      label: Parent initiative
+      placeholder: "#123 or none"
+    validations:
+      required: true
+  - type: input
+    id: dependency
+    attributes:
+      label: Predecessor or dependency
+      placeholder: "#122 or none"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and current evidence
+      description: Explain the problem, known facts, and relevant decisions.
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and value
+      description: State one concrete outcome and why this is the next useful slice.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope, non-goals, and authority boundary
+      description: Include allowed/prohibited actions and confidential input/output boundaries.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and evidence gates
+      description: Use observable pass/fail statements and name environment-specific validation.
+    validations:
+      required: true
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Handoff contract
+      description: Name the next role, exact artifact/revision, missing assumptions, and expected evidence.
+    validations:
+      required: true
+  - type: checkboxes
+    id: quality
+    attributes:
+      label: Quality checks
+      options:
+        - label: Dependencies are resolved or explicitly blocking.
+          required: true
+        - label: Success evidence is distinct from AI confidence or chat completion.
+          required: true
+        - label: No secrets or confidential generated artifacts are attached.
+          required: true
+        - label: The final handoff will be recorded here and repeated as a copy-ready chat prompt.
+          required: true

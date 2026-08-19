@@ -1,0 +1,5 @@
+# Reproducible direct dependencies for the Mac-local official MCP server.
+# Python baseline: CPython 3.14.x on macOS arm64.
+ansys-mechanical-core[mcp]==0.13.2
+ansys-mechanical-mcp==0.2.0
+ansys-workbench-core==0.14.0

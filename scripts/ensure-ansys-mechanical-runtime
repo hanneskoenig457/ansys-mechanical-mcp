@@ -1,0 +1,99 @@
+#!/bin/zsh
+
+# Explicitly prepare the Windows Mechanical runtime used by the Mac-local
+# official MCP: start/show the VM, verify SSH, start Mechanical, and establish
+# a loopback-only tunnel. This script does not start or stop the MCP server.
+
+set -eu
+set -o pipefail
+
+SCRIPT_DIR="${0:A:h}"
+WINDOWS_BOOTSTRAP="${SCRIPT_DIR}/windows/Start-AnsysMechanicalGrpc.ps1"
+
+SSH_HOST="${ANSYS_MECHANICAL_SSH_HOST:-ansys-mechanical-vm}"
+PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
+PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
+GRPC_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
+SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
+MECHANICAL_WAIT_SECONDS="${ANSYS_MECHANICAL_START_WAIT_SECONDS:-180}"
+TUNNEL_WAIT_SECONDS="${ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS:-30}"
+CONTROL_DIR="${TMPDIR:-/tmp}/ansys-mechanical-mcp-${UID}"
+CONTROL_SOCKET="${CONTROL_DIR}/ssh-control"
+
+log() {
+  print -u2 -- "[ansys-mechanical-runtime] $*"
+}
+
+fail() {
+  log "ERROR: $*"
+  exit 1
+}
+
+[[ -r "${WINDOWS_BOOTSTRAP}" ]] || fail "Windows bootstrap script not found: ${WINDOWS_BOOTSTRAP}"
+[[ "${GRPC_PORT}" == <1-65535> ]] || fail "Invalid gRPC port: ${GRPC_PORT}"
+
+mkdir -p "${CONTROL_DIR}"
+chmod 700 "${HOME}/.ssh" "${CONTROL_DIR}"
+
+if command -v prlctl >/dev/null 2>&1; then
+  VM_STATUS="$(prlctl status "${PARALLELS_VM}" 2>/dev/null || true)"
+  if [[ "${VM_STATUS}" != *running* ]]; then
+    log "Starting Parallels VM: ${PARALLELS_VM}"
+    prlctl start "${PARALLELS_VM}" >&2 || fail "Could not start Parallels VM: ${PARALLELS_VM}"
+  else
+    log "Reusing running Parallels VM: ${PARALLELS_VM}"
+  fi
+
+  if [[ -d "${PARALLELS_VM_BUNDLE}" ]]; then
+    log "Opening visible Parallels console for the requested Mechanical session"
+    open -a "Parallels Desktop" "${PARALLELS_VM_BUNDLE}" >&2 \
+      || log "WARNING: VM is running, but the Parallels console could not be opened"
+  fi
+fi
+
+log "Waiting up to ${SSH_WAIT_SECONDS}s for passwordless SSH host '${SSH_HOST}'"
+SSH_READY=0
+SSH_DEADLINE=$(( SECONDS + SSH_WAIT_SECONDS ))
+while (( SECONDS < SSH_DEADLINE )); do
+  if ssh -o BatchMode=yes -o ConnectionAttempts=1 -o ConnectTimeout=1 "${SSH_HOST}" exit >/dev/null 2>&1; then
+    SSH_READY=1
+    break
+  fi
+  sleep 2
+done
+(( SSH_READY == 1 )) || fail "SSH did not become available within ${SSH_WAIT_SECONDS}s or the dedicated key is not authorized for ${SSH_HOST}"
+
+log "Ensuring a dedicated Mechanical session listens on Windows port ${GRPC_PORT}"
+ssh -o BatchMode=yes "${SSH_HOST}" \
+  "set ANSYS_MECHANICAL_GRPC_PORT=${GRPC_PORT}&& set ANSYS_MECHANICAL_START_WAIT_SECONDS=${MECHANICAL_WAIT_SECONDS}&& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" \
+  < "${WINDOWS_BOOTSTRAP}" >&2 \
+  || fail "Windows could not start or verify Mechanical gRPC"
+
+if ssh -S "${CONTROL_SOCKET}" -O check "${SSH_HOST}" >/dev/null 2>&1; then
+  log "Reusing managed SSH tunnel"
+elif lsof -nP -iTCP:"${GRPC_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  log "Reusing an existing listener on 127.0.0.1:${GRPC_PORT}"
+else
+  log "Opening loopback-only SSH tunnel on 127.0.0.1:${GRPC_PORT}"
+  ssh -M -S "${CONTROL_SOCKET}" -fN \
+    -o BatchMode=yes \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    -L "127.0.0.1:${GRPC_PORT}:127.0.0.1:${GRPC_PORT}" \
+    "${SSH_HOST}" \
+    || fail "Could not establish the Mechanical SSH tunnel"
+fi
+
+TUNNEL_READY=0
+TUNNEL_DEADLINE=$(( SECONDS + TUNNEL_WAIT_SECONDS ))
+while (( SECONDS < TUNNEL_DEADLINE )); do
+  if nc -z 127.0.0.1 "${GRPC_PORT}" >/dev/null 2>&1; then
+    TUNNEL_READY=1
+    break
+  fi
+  sleep 1
+done
+(( TUNNEL_READY == 1 )) || fail "Mechanical tunnel did not become reachable on 127.0.0.1:${GRPC_PORT} within ${TUNNEL_WAIT_SECONDS}s"
+
+print -- "Mechanical runtime ready at 127.0.0.1:${GRPC_PORT} (transport mode: insecure)"

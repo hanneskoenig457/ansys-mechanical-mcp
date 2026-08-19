@@ -1,123 +1,86 @@
-# Steady-State Thermal Workflow
+# Steady-state thermal application roadmap
 
-## Status And Scope
+## New role of this roadmap
 
-Steady-state thermal analysis is the next explicitly selected engineering
-workflow for this repository. It is a tracked roadmap, not an implemented or
-validated capability. The public MCP surface still contains only the tools
-listed in `README.md`.
+This is an engineering application project built **with** the official
+PyMechanical-MCP server. It is not a plan to add tools to a custom MCP server.
 
-The first engineering model is deliberately a ring-only baseline. It proves
-the safe CAD-to-result pipeline before adding the aluminium bearing seat,
-machine bed, coating, or thermoelectric generator (TEG). It must not be used as
-a final design statement.
+Repository deliverables should be reviewed requirements, prompts/scripts,
+safe input/output conventions, validation records, and upstream issue reports
+where the official package has a reproducible gap.
 
-## Physical Model
+## Physical boundary
 
-A steady-state analysis solves the temperature field after storage effects have
-disappeared. It returns actual temperatures, heat fluxes, and heat flow rates
-for the declared boundary conditions. It does not answer how long the system
-takes to reach that state or what the temperature is after a particular time.
-Those questions require a transient analysis with density, heat capacity,
-initial temperature, and time-dependent loads.
+A steady-state analysis solves the temperature field after storage effects
+have disappeared. It can return temperatures, heat fluxes, and heat flow rates
+for declared boundary conditions. It does not predict warm-up time; transient
+analysis would additionally require density, heat capacity, initial conditions,
+and time-dependent loads.
 
-For the proposed baseline:
+The initial ring-only model uses deliberately idealized boundaries:
 
-- a known inner-ring temperature is a valid prescribed-temperature boundary;
-- the conducted heat rate is then an output, not a required input;
-- an outer prescribed temperature can represent an idealized, effectively
-  infinite heat sink for the first ring-only calculation;
-- this outer boundary is a strong modelling assumption, not proof of the real
-  bearing-seat or machine-bed temperature;
-- thermal capacity is irrelevant in steady state and becomes necessary only
-  for transient work.
+- a known inner-ring temperature may be prescribed;
+- conducted heat rate is then an output;
+- an outer prescribed temperature represents an idealized heat sink;
+- this does not prove the real bearing-seat or machine-bed temperature;
+- no TEG constants may be invented without a concrete datasheet.
 
-A TEG does not create useful electrical power from heat flow alone. A concrete
-module produces a voltage from a temperature difference through the Seebeck
-effect, while its own thermal resistance changes that temperature difference.
-Electrical power also depends on the module's internal resistance and external
-load. No generic TEG constants may be invented.
+## Delivery principles
 
-## Staged Delivery Contract
+Every consequential stage follows:
 
-Each stage is developed on the macOS development machine, fake/unit tested,
-reviewed, committed, and pushed. The exact commit is then validated on the
-licensed Windows Mechanical machine before the next stage begins. A stage is
-not `Done` until both evidence gates pass.
+1. inspect current Mechanical/project state;
+2. define target, units, assumptions, and non-goals;
+3. review the exact official MCP tool calls and any Mechanical script;
+4. explicitly authorize the bounded mutation;
+5. execute once without automatic mutating retry;
+6. read back native state/results;
+7. record versions, evidence, discrepancy, and cleanup in the GitHub issue.
 
-| Stage | Deliverable | Windows gate |
+Use harmless local models. Keep CAD, `.mechdb`, Workbench hierarchies, solver
+databases, and confidential screenshots outside Git under ignored local roots.
+
+## Stages
+
+| Stage | Outcome | Evidence gate |
 | --- | --- | --- |
-| 1 | Local CAD intake, deterministic import preview, explicit confirmation, and controlled import into a new or proven-empty test project | One harmless local CAD file imports once; actual bodies, units, project state, process count, and listener are recorded |
-| 2 | Create and read back one unambiguous Steady-State Thermal analysis | Analysis type and identity are verified; no loads, mesh, or solve |
-| 3 | Explicit constant isotropic conductivity contract and material assignment | Material name, conductivity, unit, source, and assigned body are read back |
-| 4 | Preview, confirm, and apply a fixed temperature to a re-resolved inner-ring face | Scope, value, and unit are read back from Mechanical |
-| 5 | Apply an explicitly idealized fixed-temperature sink to a re-resolved outer face | Scope and assumption are visible in the structured result |
-| 6 | Controlled mesh creation and diagnostics | Mesh status, node/element counts, and available quality evidence are recorded |
-| 7 | Solve the selected analysis and summarize thermal results | Solver state, temperature extrema and units, hotspot location, available heat-flux results, and a defensible energy-balance check are returned |
-| 8 | Add the aluminium bearing seat and thermal contact | Perfect-contact baseline is compared with an explicit contact-conductance parameter |
-| 9 | Add a separately selectable coating region and local TEG patch | Coating/TEG thermal resistance uses documented geometry and concrete material/module data |
-| 10 | Optional thermal-electric estimate or coupling | Only a named TEG and datasheet-backed Seebeck, resistance, conductance, temperature dependence, and load are used |
+| 0 | Inventory official v0.2.0 tools against Mechanical 2025 R1 | Status/model info and lifecycle behavior recorded without mutation |
+| 1 | Review and import one harmless ring CAD file | File identity, units, body count, and project state verified |
+| 2 | Create/read back one Steady-State Thermal analysis | Analysis type and identity verified; no loads or solve |
+| 3 | Assign explicit isotropic conductivity | Material, value, unit, source, and body read back |
+| 4 | Apply fixed temperature to revalidated inner-ring scope | Target, value, unit, and scope read back |
+| 5 | Apply explicitly idealized outer-temperature sink | Assumption and scope visible in evidence |
+| 6 | Generate controlled mesh and diagnostics | Mesh state and available quality/count evidence recorded |
+| 7 | Solve and summarize thermal results | Solver state, extrema/units, location, flux, and energy-balance evidence |
+| 8 | Add aluminium bearing seat and contact | Perfect-contact baseline compared with explicit conductance |
+| 9 | Add coating and local TEG region | Geometry and thermal resistance use documented data |
+| 10 | Optional electrical estimate/coupling | Only named module and datasheet-backed properties used |
 
-Later stages may be split further when API research or live evidence shows that
-a smaller review boundary is safer. They must not be collapsed into a single
-unvalidated implementation jump.
+Later stages may split further when a smaller review boundary is safer. Never
+collapse multiple unvalidated mutations merely because the official MCP exposes
+general scripting.
 
-## Local CAD And Result Boundary
+## GitHub contract
 
-Real or potentially confidential CAD and solver artifacts stay outside Git.
-The conventional repository-local paths are:
+Track the initiative as a parent issue and each stage as a child issue using
+the general method in
+[github-development-workflow.md](github-development-workflow.md).
 
-```text
-local-validation/
-  inputs/
-  outputs/
-```
+Each child issue must contain:
 
-Both content directories are gitignored. Do not commit CAD, `.mechdb`, Workbench
-hierarchies, result databases, screenshots containing confidential geometry, or
-exported solver data.
+- objective, dependency, and non-goals;
+- exact input/confidentiality boundary;
+- expected official MCP tools;
+- reviewed script if a general scripting tool is required;
+- units and modeling assumptions;
+- read-back and cleanup evidence;
+- exact environment/package/Mechanical versions;
+- result: passed, failed, or blocked;
+- next-stage decision.
 
-Stage 1 must introduce an explicitly configured allowed input root and a
-separate output root. Public tools accept only relative paths inside those
-roots. Canonical resolution must reject absolute paths, `..`, symlink/alias
-escapes, unsupported types, and overwrite attempts. The read-only intake result
-contains only safe metadata such as normalized relative path, file type, size,
-and SHA-256; it never embeds file contents.
+## First next action
 
-## Preview, Confirm, Apply, Inspect
-
-Every consequential mutation follows the same protocol:
-
-1. **Inspect** the current project, analysis, model revision, and proposed
-   target without mutation.
-2. **Preview** a canonical plan containing inputs, units, target evidence,
-   prerequisites, assumptions, warnings, and a deterministic plan ID.
-3. **Confirm** by supplying that exact plan ID. A conversational “yes” alone is
-   not an executable authorization token.
-4. **Apply** at most once after rechecking file hashes, target identity,
-   project state, and output non-existence. Never retry a possibly mutating
-   Mechanical failure automatically.
-5. **Inspect** the native result and return structured evidence of what
-   Mechanical actually contains.
-
-Preview calls never mutate. Apply fails closed on changed inputs, stale or
-ambiguous selections, non-empty/unknown project state, existing outputs, or
-missing prerequisites.
-
-## Per-Stage Evidence
-
-The GitHub issue is the handoff record. It must contain:
-
-- exact branch and commit;
-- macOS fake/unit/MCP checks and their commands;
-- assumptions that still require Mechanical;
-- precise Windows setup and allowed mutation scope;
-- actual Mechanical/PyMechanical version and safe configuration;
-- exact tool order and structured results;
-- GUI/process/listener evidence before and after the test;
-- discrepancies, reproduction order, and the next responsible machine.
-
-Fake tests never count as a Mechanical round trip. Windows evidence never
-justifies an ad hoc source change in the normal validation checkout. See
-`docs/github-development-workflow.md` and
-`docs/live-validation-workflow.md` for the operational handoff.
+Open a Stage 0 issue to inventory the official tool surface in the current
+Mac/Parallels setup. Do not begin CAD import or model creation until lifecycle,
+file paths, working-directory resource behavior, and harmless model-info calls
+are understood on Mechanical 2025 R1.
