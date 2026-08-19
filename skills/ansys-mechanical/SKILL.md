@@ -79,11 +79,13 @@ Rules specific to this path:
   schematic display letter. Mechanical's own outline may show
   `B: Steady-State Thermal` while the correct argument is `SYS`. If unknown,
   see `docs/workbench-integration.md` for the one-line query.
-- **Do not re-run the script against a system that already has a live
-  Mechanical server** unless the user accepts losing it.
-  `start_mechanical_server()` is not idempotent: it replaces the process, and
-  the previous Mechanical session for that system exits. Prefer
-  `check_mechanical_status` and reuse.
+- The script is safe to re-run: if `50053` already answers, it keeps that
+  session untouched. Only `ANSYS_WORKBENCH_FORCE_RESTART=1` replaces it, which
+  kills the running Mechanical session — ask the user first.
+- **Never call `disconnect_from_mechanical` on a Workbench-managed session.**
+  It terminates the Mechanical process itself, not just the connection
+  (confirmed on this setup). Recovery needs a forced restart, which loses any
+  unsaved work. To stop using a connection, simply stop using it.
 - There is no clean programmatic stop on this install (`stop_mechanical_server()`
   is a no-op below Workbench framework 25.2; this one reports 25.1). Releasing
   a system's Mechanical server means closing Workbench or Mechanical itself —

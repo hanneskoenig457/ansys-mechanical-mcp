@@ -102,6 +102,32 @@ work either). If a relevant project is open unsaved in an already-running
 Workbench GUI, save and close it first; there is no way to attach to it
 without that step.
 
+## Cold start: licensing must be ready first
+
+Validated by shutting the VM down completely and running the script against it.
+
+SSH answers within seconds of a cold boot, but Ansys is not usable yet. The
+Windows services (`ANSYS, Inc. License Manager CVD`, `ANSYS Licensing Tomcat`)
+report `Running`/`Automatic` early, while the FlexNet daemons that actually
+serve licences -- `lmgrd` and `ansyslmd` -- were observed appearing about
+**two minutes after boot**. Starting Workbench before that produces:
+
+1. `ANSYS LICENSE MANAGER ERROR: Connection timed out while reading data`,
+2. `Workbench could not connect to a valid licensing server`, a modal dialog
+   that blocks GUI initialization, so `-E StartServer(...)` never runs and the
+   port never opens, and
+3. Mechanical falling back to **read-only** mode if it is opened at all.
+
+`Start-AnsysWorkbenchGrpc.ps1` therefore waits for an interactive console
+session, a network adapter that is up, and both FlexNet daemons (confirmed
+with `ansysli_util -liclist` when available) before launching anything. That
+wait has its own budget, `ANSYS_WORKBENCH_READY_WAIT_SECONDS` (default 300),
+so it cannot eat into the time allowed for Workbench itself.
+
+If the daemons never come up, start the license manager once from
+`http://localhost:1084` in the VM. Whether they auto-start reliably on this VM
+is still open: in one observed boot they only appeared after that manual step.
+
 ## Known caveats
 
 - **`Security='...'` is unsupported on this install.** This Ansys 251
@@ -113,18 +139,35 @@ without that step.
   `connect_to_mechanical(..., transport_mode="insecure")`), matching the rest
   of this deployment.
 - **`start_mechanical_server()` is not idempotent.** Calling it again for the
-  same system does not return the existing server's port; it appears to
-  replace the process, and the previous Mechanical process for that system
-  was observed to exit. Re-running `ensure-ansys-workbench-mechanical-runtime`
-  against a system that already has a live Mechanical server should be
-  avoided if an existing MCP connection to it must survive -- reconnect the
-  MCP client after any re-run.
+  same system does not return the existing server's port; it replaces the
+  process, and the previous Mechanical process for that system exits.
+  `ensure-ansys-workbench-mechanical-runtime` guards against this: if
+  `127.0.0.1:50053` already answers a real scripting call, it keeps that
+  session and exits without touching it. Pass
+  `ANSYS_WORKBENCH_FORCE_RESTART=1` to deliberately replace it.
+- **`disconnect_from_mechanical` terminates the Mechanical process**, it does
+  not merely close the client connection. Confirmed here: calling it dropped
+  the `AnsysWBU` process and its port off the VM entirely, and recovering
+  required a full `ANSYS_WORKBENCH_FORCE_RESTART=1` re-run. This is the
+  `Mechanical.exit()`-on-shutdown behavior noted in the README, and it costs
+  more in the Workbench case, where the only way back is another
+  non-idempotent `start_mechanical_server()`. Just stop using the connection
+  instead; a stale one is cheap, a destroyed session is not.
 - **`stop_mechanical_server()` is a no-op below Workbench framework version
   25.2** (`GetFrameworkVersion()` reports `25.1` here) -- its implementation
   only calls the underlying `StopMechanicalServerOnSystem` journal command on
   25.2+. There is currently no clean way to stop a per-system Mechanical
   server through PyWorkbench on this install; closing Workbench (or the
   Mechanical process directly) is the only way to release it.
+- **Run the Windows bootstrap with `-File`, never `powershell -Command -` over
+  stdin.** With stdin, PowerShell evaluates the input as independent statement
+  groups: a `throw` aborts only its own group, execution continues, and the
+  exit status does not reflect the failure. That produced a run whose log
+  contained two `throw` messages and still reported success. The script is
+  copied over and invoked with `-File`, and its path is passed unquoted (outer
+  quotes survive the remote shell and break `-File`) and without a trailing
+  `; exit $LASTEXITCODE` (the remote side is `cmd.exe`, which glues the `;`
+  onto the preceding argument).
 - The local-port remap (`50053 -> <dynamic mechanical port>`) is tracked in
   `${TMPDIR}/ansys-mechanical-mcp-<uid>/last-mech-port-50053` so a re-run can
   cancel the previous, now-stale forward before adding the new one. Deleting

@@ -9,13 +9,28 @@
 - Register the official stdio server with Codex.
 - Prove a live PyMechanical connection and successful Codex MCP loading.
 
-## Current: make setup reproducible and safe
+## Completed: make setup reproducible and safe
 
 - Keep exact Python/package/path facts in the private setup guide.
 - Pin direct Mac dependencies.
 - Keep public architecture and validation docs free of private credentials.
 - Explicitly document the official v0.2.0 shutdown/`Mechanical.exit()` caveat.
 - Use read-only first prompts and classify consequential tools.
+- Make a clone self-sufficient: `scripts/bootstrap-workstation` rebuilds the
+  environment, and `scripts/patch-mcp-remote-paths.py` turns the former
+  site-packages hand-edit into a verified, idempotent step.
+- Commit the agent skill and share it with Claude Code and Codex by symlink,
+  so both agents follow one file.
+
+## Completed: reach Workbench-managed projects
+
+- Reach a Mechanical system inside a `.wbpj` without leaving Workbench, using
+  PyWorkbench and `RunWB2.exe -I -E "StartServer(...)"`.
+- Remap the per-system Mechanical port onto the existing `50053` endpoint so
+  the MCP registration is unchanged.
+- Carry every forward over one shared SSH ControlMaster connection.
+- See [workbench-integration.md](workbench-integration.md) for the caveats
+  found while validating it.
 
 ## Next: exercise official capabilities deliberately
 

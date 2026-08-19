@@ -77,9 +77,26 @@ done
 (( SSH_READY == 1 )) || fail "SSH did not become available within ${SSH_WAIT_SECONDS}s"
 
 log "Ensuring Workbench GUI is running with its project-schematic gRPC server on Windows port ${WB_GRPC_PORT}"
+# The bootstrap is copied and run with -File rather than piped into
+# "powershell -Command -". With stdin, PowerShell evaluates the input as
+# separate statement groups: a `throw` only aborts the group it occurs in and
+# execution continues with the next one, so guard clauses do not actually
+# stop the script and the exit code does not reflect the failure. -File gives
+# normal script semantics, where a throw terminates and sets a failing exit
+# code that the `||` below can see.
+REMOTE_BOOTSTRAP='C:/Users/hanne/AppData/Local/Temp/Start-AnsysWorkbenchGrpc.ps1'
+scp -q "${WINDOWS_BOOTSTRAP}" "${SSH_HOST}:${REMOTE_BOOTSTRAP}" \
+  || fail "Could not copy the Workbench bootstrap script to Windows"
+# PowerShell accepts forward slashes in paths, so no backslash conversion is
+# needed (and attempting it in zsh mangles the path at the \U in \Users).
+# Two things this line must not do: quote the path (the quotes survive the
+# remote shell and land inside the -File argument, giving "unsupported path
+# format"), and append `; exit $LASTEXITCODE` (the remote side runs through
+# cmd.exe, which does not treat `;` as a separator, so it is glued onto the
+# last argument as "180;"). With -File and a valid path, a throw inside the
+# script already exits non-zero, which is what the `||` below relies on.
 ssh -o BatchMode=yes "${SSH_HOST}" \
-  "set ANSYS_WORKBENCH_GRPC_PORT=${WB_GRPC_PORT}&& set ANSYS_WORKBENCH_START_WAIT_SECONDS=${WB_WAIT_SECONDS}&& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" \
-  < "${WINDOWS_BOOTSTRAP}" >&2 \
+  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS}" >&2 \
   || fail "Windows could not start or verify the Workbench gRPC server"
 
 if ssh -S "${CONTROL_SOCKET}" -O check "${SSH_HOST}" >/dev/null 2>&1; then
@@ -99,6 +116,29 @@ if ! lsof -nP -iTCP:"${WB_GRPC_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   log "Forwarding Workbench server port 127.0.0.1:${WB_GRPC_PORT}"
   ssh -S "${CONTROL_SOCKET}" -O forward -L "127.0.0.1:${WB_GRPC_PORT}:127.0.0.1:${WB_GRPC_PORT}" "${SSH_HOST}" \
     || fail "Could not forward the Workbench server port"
+fi
+
+# start_mechanical_server() is not idempotent: each call replaces the running
+# Mechanical process for that system, killing any session a client is already
+# using. So if the standard endpoint already serves a live Mechanical, stop
+# here and keep it, unless the caller explicitly asked for a fresh one.
+if [[ "${ANSYS_WORKBENCH_FORCE_RESTART:-0}" != "1" ]] \
+  && nc -z 127.0.0.1 "${MECH_LOCAL_PORT}" >/dev/null 2>&1; then
+  if "${VENV_PYTHON}" - "${MECH_LOCAL_PORT}" <<'PYEOF' >/dev/null 2>&1
+import sys, warnings
+warnings.filterwarnings("ignore")
+from ansys.mechanical.core import connect_to_mechanical
+
+mech = connect_to_mechanical(ip="127.0.0.1", port=int(sys.argv[1]), transport_mode="insecure")
+# Touch the session so a merely-open socket does not count as alive.
+mech.run_python_script("1")
+PYEOF
+  then
+    print -- "Mechanical already reachable at 127.0.0.1:${MECH_LOCAL_PORT}; kept as-is (transport mode: insecure)"
+    print -- "Set ANSYS_WORKBENCH_FORCE_RESTART=1 to replace it with a new server for system '${SYSTEM_NAME}'."
+    exit 0
+  fi
+  log "127.0.0.1:${MECH_LOCAL_PORT} is open but not serving a live Mechanical; starting a new server"
 fi
 
 log "Opening project and starting the Mechanical server for system '${SYSTEM_NAME}' (this can take a minute)"

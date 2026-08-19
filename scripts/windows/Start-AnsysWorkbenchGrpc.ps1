@@ -13,6 +13,16 @@ param(
             180
         }
     ),
+    # Separate budget: on a cold boot the FlexNet licensing daemons were seen
+    # taking ~2 minutes to appear, and that wait must not eat into the time
+    # allowed for Workbench itself to open its port afterwards.
+    [int]$ReadinessWaitSeconds = $(
+        if ($env:ANSYS_WORKBENCH_READY_WAIT_SECONDS) {
+            [int]$env:ANSYS_WORKBENCH_READY_WAIT_SECONDS
+        } else {
+            300
+        }
+    ),
     [string]$WorkbenchExecutable = "C:\Program Files\ANSYS Inc\v251\Framework\bin\Win64\RunWB2.exe",
     [string]$TaskName = ""
 )
@@ -38,6 +48,81 @@ if (-not (Test-Path -LiteralPath $WorkbenchExecutable -PathType Leaf)) {
 if (Test-GrpcListener) {
     Write-Output "Workbench gRPC is already listening on port $GrpcPort."
     exit 0
+}
+
+# On a cold VM boot, SSH answers well before the machine is actually ready to
+# run Ansys: the network adapter is still initializing and the licensing
+# client cannot reach a server yet. Starting Workbench at that moment produces
+# a blocking "could not connect to a valid licensing server" dialog, the GUI
+# never finishes initializing, the -E StartServer command never runs, and the
+# port never opens. Mechanical additionally falls back to read-only mode.
+# So wait for licensing to actually be usable before launching anything.
+function Test-InteractiveSession {
+    # An interactive scheduled task cannot paint a GUI without a signed-in
+    # console session.
+    $sessions = (query session 2>$null) -join "`n"
+    return $sessions -match '(?m)^\s*>?console\s+\S+\s+\d+\s+(Aktiv|Active)'
+}
+
+function Test-NetworkReady {
+    $up = Get-NetAdapter -ErrorAction SilentlyContinue |
+        Where-Object { $_.Status -eq "Up" -and $_.Virtual -eq $false }
+    if (-not $up) {
+        $up = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq "Up" }
+    }
+    return $null -ne $up
+}
+
+function Test-LicensingReady {
+    # The Windows services (License Manager CVD, Licensing Tomcat) reach
+    # "Running" well before licensing actually works: the FlexNet daemons
+    # lmgrd and ansyslmd are what Workbench needs, and on this VM they were
+    # observed appearing about 2 minutes after boot -- long after SSH answers.
+    # Checking the services alone therefore reports ready far too early.
+    $lmgrd = Get-Process lmgrd -ErrorAction SilentlyContinue
+    $ansyslmd = Get-Process ansyslmd -ErrorAction SilentlyContinue
+    if (-not $lmgrd -or -not $ansyslmd) { return $false }
+
+    # Daemons are up; confirm with a real query when the utility is present.
+    # -liclist asks the configured server without consuming a seat.
+    if ($env:AWP_ROOT251) {
+        $utility = Join-Path $env:AWP_ROOT251 "licensingclient\winx64\ansysli_util.exe"
+        if (Test-Path -LiteralPath $utility -PathType Leaf) {
+            $null = & $utility -liclist 2>&1
+            return $LASTEXITCODE -eq 0
+        }
+    }
+    return $true
+}
+
+$readinessDeadline = (Get-Date).AddSeconds($ReadinessWaitSeconds)
+$sessionOk = $false
+$licenseOk = $false
+while ((Get-Date) -lt $readinessDeadline) {
+    if (-not $sessionOk) { $sessionOk = Test-InteractiveSession }
+    if ($sessionOk -and (Test-NetworkReady) -and (Test-LicensingReady)) {
+        $licenseOk = $true
+        break
+    }
+    Start-Sleep -Seconds 3
+}
+
+if (-not $sessionOk) {
+    throw "No active interactive console session. Sign in to Windows in the Parallels console, then retry: an interactive scheduled task cannot start a GUI without one."
+}
+if (-not $licenseOk) {
+    throw "Ansys licensing did not become reachable within $ReadinessWaitSeconds seconds (waiting for the lmgrd and ansyslmd FlexNet daemons). Workbench would open with a blocking 'could not connect to a valid licensing server' dialog and Mechanical would fall back to read-only, so it was not started. Open http://localhost:1084 in the VM and start the license manager, then retry. Raise ANSYS_WORKBENCH_READY_WAIT_SECONDS if the daemons simply need longer."
+}
+
+Write-Output "Interactive session, network, and licensing are ready."
+
+# A Workbench from an earlier failed attempt is still running but has no
+# server port (for example, stuck behind a licensing dialog). Launching a
+# second one would not fix it and would leave two GUIs behind, so report the
+# state instead of stacking processes.
+$existingWorkbench = Get-Process RunWB2 -ErrorAction SilentlyContinue
+if ($existingWorkbench) {
+    throw "Workbench (RunWB2, PID $($existingWorkbench.Id -join ', ')) is already running but port $GrpcPort is not open. It was most likely started before licensing was reachable and is waiting on an error dialog, or was started without the -E StartServer argument. Close Workbench in the VM and retry; StartServer() only takes effect at launch."
 }
 
 # A program launched directly by Windows OpenSSH lands in the non-interactive
