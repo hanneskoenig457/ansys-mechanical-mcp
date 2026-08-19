@@ -23,6 +23,10 @@ param(
             300
         }
     ),
+    # FlexNet licence port, as clients report it ("License path: 1055@localhost").
+    [int]$LicensePort = $(
+        if ($env:ANSYS_LICENSE_PORT) { [int]$env:ANSYS_LICENSE_PORT } else { 1055 }
+    ),
     [string]$WorkbenchExecutable = "C:\Program Files\ANSYS Inc\v251\Framework\bin\Win64\RunWB2.exe",
     [string]$TaskName = ""
 )
@@ -83,26 +87,54 @@ function Test-LicensingReady {
     $ansyslmd = Get-Process ansyslmd -ErrorAction SilentlyContinue
     if (-not $lmgrd -or -not $ansyslmd) { return $false }
 
-    # Daemons are up; confirm with a real query when the utility is present.
-    # -liclist asks the configured server without consuming a seat.
-    if ($env:AWP_ROOT251) {
-        $utility = Join-Path $env:AWP_ROOT251 "licensingclient\winx64\ansysli_util.exe"
-        if (Test-Path -LiteralPath $utility -PathType Leaf) {
-            $null = & $utility -liclist 2>&1
-            return $LASTEXITCODE -eq 0
-        }
+    # Then confirm the server is actually accepting connections on the licence
+    # port, which is what a client failing here reports as
+    # "License path: 1055@localhost". Checking the port rather than shelling
+    # out to ansysli_util is deliberate: that utility's option set is not
+    # stable to guess at (an invented "-liclist" silently failed every check
+    # and blocked startup entirely), whereas a listening socket is unambiguous.
+    $listening = Get-NetTCPConnection -State Listen -LocalPort $LicensePort -ErrorAction SilentlyContinue
+    return $null -ne $listening
+}
+
+function Start-LicensingDaemons {
+    # On this VM the FlexNet daemons do not reliably come up on their own after
+    # a cold boot, even though the CVD service reports Running/Automatic.
+    # Restarting that service does start them (verified). This is the scripted
+    # equivalent of running ansyslmcenter.exe as administrator, which is what
+    # gets the daemons up by hand. Requires an elevated session; the SSH login
+    # on this VM already is one.
+    $service = Get-Service "ANSYS, Inc. License Manager CVD" -ErrorAction SilentlyContinue
+    if (-not $service) { return $false }
+    try {
+        Restart-Service $service -Force -ErrorAction Stop
+        return $true
+    } catch {
+        return $false
     }
-    return $true
 }
 
 $readinessDeadline = (Get-Date).AddSeconds($ReadinessWaitSeconds)
 $sessionOk = $false
 $licenseOk = $false
+$nudgedLicensing = $false
+# Give the daemons a grace period to appear by themselves before intervening;
+# restarting the service while something holds a licence throws error dialogs
+# in any running Ansys app.
+$nudgeAfter = (Get-Date).AddSeconds(90)
 while ((Get-Date) -lt $readinessDeadline) {
     if (-not $sessionOk) { $sessionOk = Test-InteractiveSession }
     if ($sessionOk -and (Test-NetworkReady) -and (Test-LicensingReady)) {
         $licenseOk = $true
         break
+    }
+    if (-not $nudgedLicensing -and (Get-Date) -gt $nudgeAfter -and $sessionOk -and (Test-NetworkReady)) {
+        Write-Output "Licensing daemons still absent; restarting the ANSYS License Manager service."
+        $nudgedLicensing = Start-LicensingDaemons
+        if (-not $nudgedLicensing) {
+            Write-Output "Could not restart the licensing service automatically; continuing to wait."
+            $nudgedLicensing = $true  # do not retry in a loop
+        }
     }
     Start-Sleep -Seconds 3
 }
@@ -147,7 +179,12 @@ $principal = New-ScheduledTaskPrincipal `
     -UserId $userId `
     -LogonType Interactive `
     -RunLevel Limited
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
+# Deliberately NO trigger. An -AtLogOn trigger was tried and is actively
+# harmful here: Windows then launches Workbench about 10 seconds after boot,
+# long before the FlexNet licensing daemons exist, so it comes up behind a
+# "Cannot connect to license server system" dialog and bypasses every
+# readiness check in this script. The task exists only as a launcher that
+# Start-ScheduledTask invokes below, once conditions are verified.
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
@@ -159,16 +196,14 @@ if ($null -eq $existingTask) {
         -TaskName $TaskName `
         -Action $action `
         -Principal $principal `
-        -Trigger $trigger `
         -Settings $settings `
-        -Description "Starts Ansys Workbench 2025 R1 (GUI) with its project-schematic gRPC server on port $GrpcPort." `
+        -Description "On-demand launcher for Ansys Workbench 2025 R1 (GUI) with its project-schematic gRPC server on port $GrpcPort. Intentionally has no trigger: it is started by this script only after licensing is verified." `
         -ErrorAction Stop | Out-Null
 } else {
     Set-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
         -Principal $principal `
-        -Trigger $trigger `
         -Settings $settings `
         -ErrorAction Stop | Out-Null
 }

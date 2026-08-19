@@ -73,6 +73,12 @@ starts a Mechanical server for that one system, and remaps it onto the usual
 `127.0.0.1:50053`. Then call `connect_to_mechanical` exactly as normal — no
 MCP reconfiguration.
 
+On a cold VM boot this takes several minutes: the script waits for the Windows
+sign-in, then for the FlexNet licensing daemons, restarting the licensing
+service itself if they do not appear. Let it run rather than interrupting it.
+The user must sign in to Windows in the Parallels console — a GUI cannot start
+without an interactive session, and the script says so if one is missing.
+
 Rules specific to this path:
 
 - The system name is the **internal** name from `GetAllSystems()`, not the

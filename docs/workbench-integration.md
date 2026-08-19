@@ -124,9 +124,40 @@ with `ansysli_util -liclist` when available) before launching anything. That
 wait has its own budget, `ANSYS_WORKBENCH_READY_WAIT_SECONDS` (default 300),
 so it cannot eat into the time allowed for Workbench itself.
 
-If the daemons never come up, start the license manager once from
-`http://localhost:1084` in the VM. Whether they auto-start reliably on this VM
-is still open: in one observed boot they only appeared after that manual step.
+The daemons do **not** come up reliably by themselves on this VM. Observed
+twice: over a minute after boot, `lmgrd` and `ansyslmd` were still absent
+while the CVD service sat at `Running`. By hand, running
+`C:\Program Files\ANSYS Inc\Shared Files\licensing\winx64\ansyslmcenter.exe`
+as administrator fixes it. The scripted equivalent, verified to work, is
+restarting the service:
+
+```powershell
+Restart-Service "ANSYS, Inc. License Manager CVD" -Force
+```
+
+`Start-AnsysWorkbenchGrpc.ps1` does this automatically, but only after a 90
+second grace period in which the daemons may still appear on their own, and
+only once. The delay is deliberate: restarting the service while a running
+Ansys application holds a licence throws `Cannot connect to license server
+system` dialogs in that application. It needs an elevated session; the SSH
+login on this VM already is one.
+
+Readiness is judged by the licence port (`1055` by default, overridable with
+`ANSYS_LICENSE_PORT`) accepting connections, plus both daemons being present.
+Do not probe `ansysli_util` for this: its option set is not safe to guess at.
+An invented `-liclist` returned `Unknown option` with exit code 1 on every
+call, so the check reported "not ready" forever and blocked startup even
+though licensing was fully working.
+
+### Do not give the launcher task a trigger
+
+The scheduled task that launches Workbench must have **no trigger at all**.
+An `-AtLogOn` trigger was tried and is actively harmful: Windows then starts
+Workbench roughly 10 seconds after boot, far ahead of licensing, so it comes
+up behind the licensing dialog, bypasses every readiness check in this script,
+and leaves stray `RunWB2`/`AnsysWBU` processes behind that later runs then
+trip over. The task exists purely as an elevation/session vehicle that
+`Start-ScheduledTask` invokes once conditions are verified.
 
 ## Known caveats
 
