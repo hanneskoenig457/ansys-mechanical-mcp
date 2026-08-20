@@ -13,6 +13,7 @@ WINDOWS_BOOTSTRAP="${SCRIPT_DIR}/windows/Start-AnsysMechanicalGrpc.ps1"
 SSH_HOST="${ANSYS_MECHANICAL_SSH_HOST:-ansys-mechanical-vm}"
 PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
 PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
+ANSYS_VERSION="${ANSYS_VERSION:-251}"
 GRPC_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
 SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
 MECHANICAL_WAIT_SECONDS="${ANSYS_MECHANICAL_START_WAIT_SECONDS:-180}"
@@ -65,7 +66,7 @@ done
 
 log "Ensuring a dedicated Mechanical session listens on Windows port ${GRPC_PORT}"
 ssh -o BatchMode=yes "${SSH_HOST}" \
-  "set ANSYS_MECHANICAL_GRPC_PORT=${GRPC_PORT}&& set ANSYS_MECHANICAL_START_WAIT_SECONDS=${MECHANICAL_WAIT_SECONDS}&& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" \
+  "set ANSYS_MECHANICAL_GRPC_PORT=${GRPC_PORT}&& set ANSYS_MECHANICAL_START_WAIT_SECONDS=${MECHANICAL_WAIT_SECONDS}&& set ANSYS_VERSION=${ANSYS_VERSION}&& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command -" \
   < "${WINDOWS_BOOTSTRAP}" >&2 \
   || fail "Windows could not start or verify Mechanical gRPC"
 

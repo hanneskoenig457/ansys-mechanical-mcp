@@ -27,7 +27,13 @@ param(
     [int]$LicensePort = $(
         if ($env:ANSYS_LICENSE_PORT) { [int]$env:ANSYS_LICENSE_PORT } else { 1055 }
     ),
-    [string]$WorkbenchExecutable = "C:\Program Files\ANSYS Inc\v251\Framework\bin\Win64\RunWB2.exe",
+    # Three-digit Ansys release directory ("251" = 2025 R1). Kept separate from
+    # the executable path so a different release only needs one value, while
+    # -WorkbenchExecutable still allows a non-standard install location.
+    [string]$AnsysVersion = $(
+        if ($env:ANSYS_VERSION) { $env:ANSYS_VERSION } else { "251" }
+    ),
+    [string]$WorkbenchExecutable = "C:\Program Files\ANSYS Inc\v$AnsysVersion\Framework\bin\Win64\RunWB2.exe",
     [string]$TaskName = ""
 )
 

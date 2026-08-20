@@ -133,6 +133,39 @@ this sequence across projects. It is the single source of truth: both
 `~/.codex/skills/ansys-mechanical/SKILL.md` are symlinks to that file, so an
 edit here reaches every agent at once.
 
+## Adapting to another machine
+
+Nothing below has to be set for the reference setup; every entry has a working
+default. They exist so a different Mac, VM, Windows account, or Ansys release
+does not require editing the scripts.
+
+| Variable | Default | What it selects |
+| --- | --- | --- |
+| `ANSYS_MECHANICAL_SSH_HOST` | `ansys-mechanical-vm` | SSH host alias for the Windows VM |
+| `ANSYS_PARALLELS_VM` | `Windows 11` | VM name passed to `prlctl` |
+| `ANSYS_PARALLELS_VM_BUNDLE` | `/Volumes/WindowsVM/Windows 11.pvm` | `.pvm` opened to show the console |
+| `ANSYS_VERSION` | `251` | Ansys release directory (`v251` = 2025 R1), used for both Windows executables |
+| `ANSYS_MCP_PYTHON` | CPython 3.14 framework build | Interpreter the bootstrap builds `.venv` from |
+| `ANSYS_MECHANICAL_GRPC_PORT` | `50053` | Local and remote Mechanical gRPC port |
+| `ANSYS_WORKBENCH_GRPC_PORT` | `51000` | Workbench project-schematic gRPC port |
+| `ANSYS_WINDOWS_TEMP` | auto-detected via `$env:TEMP` | Windows directory the bootstrap script is copied into |
+| `ANSYS_LICENSE_PORT` | `1055` | FlexNet port probed for licensing readiness |
+| `ANSYS_WORKBENCH_PROJECT_PATH` | — | `.wbpj` to open, if not passed as argument 1 |
+| `ANSYS_WORKBENCH_SYSTEM_NAME` | — | Internal system name, if not passed as argument 2 |
+| `ANSYS_WORKBENCH_FORCE_RESTART` | `0` | `1` replaces a live Mechanical server, killing that session |
+
+Timeouts, all in seconds: `ANSYS_MECHANICAL_SSH_WAIT_SECONDS` (180),
+`ANSYS_MECHANICAL_START_WAIT_SECONDS` (180),
+`ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS` (30),
+`ANSYS_WORKBENCH_START_WAIT_SECONDS` (180), and
+`ANSYS_WORKBENCH_READY_WAIT_SECONDS` (300, the budget for the interactive
+sign-in and the licensing daemons; deliberately separate so a slow cold boot
+does not eat into the time allowed for Workbench itself).
+
+Still machine-specific and **not** covered by any of these: the SSH key and
+host alias, the MCP registration with your agent, and the Ansys installation
+in the VM itself. The bootstrap script prints those as remaining manual steps.
+
 ## Persistence at a glance
 
 - `.venv` is durable on disk until it is deleted, but it is not committed.
@@ -140,8 +173,11 @@ edit here reaches every agent at once.
 - The MCP remote-path patch lives in `.venv/.../site-packages` and does **not**
   survive a reinstall or upgrade of `ansys-mechanical-mcp`. Rerun
   `scripts/patch-mcp-remote-paths.py` after any such change.
-- The skill is committed here; the agent copies under `~/.claude/skills` and
-  `~/.codex/skills` are symlinks recreated by the bootstrap script.
+- `skills/ansys-mechanical/SKILL.md.in` is the committed template; the bootstrap
+  script generates `SKILL.md` next to it with this clone's absolute path
+  substituted for `@REPO_DIR@`. The generated file is git-ignored, so edit the
+  template. The agent copies under `~/.claude/skills` and `~/.codex/skills` are
+  symlinks to the generated file, recreated by the bootstrap script.
 - The Codex MCP entry is durable in the user's Codex configuration until it is
   removed or changed.
 - The dedicated SSH key and `ansys-mechanical-vm` host alias are durable in

@@ -13,7 +13,13 @@ param(
             180
         }
     ),
-    [string]$MechanicalExecutable = "C:\Program Files\ANSYS Inc\v251\aisol\bin\winx64\AnsysWBU.exe",
+    # Three-digit Ansys release directory ("251" = 2025 R1). Kept separate from
+    # the executable path so a different release only needs one value, while
+    # -MechanicalExecutable still allows a non-standard install location.
+    [string]$AnsysVersion = $(
+        if ($env:ANSYS_VERSION) { $env:ANSYS_VERSION } else { "251" }
+    ),
+    [string]$MechanicalExecutable = "C:\Program Files\ANSYS Inc\v$AnsysVersion\aisol\bin\winx64\AnsysWBU.exe",
     [string]$TaskName = ""
 )
 

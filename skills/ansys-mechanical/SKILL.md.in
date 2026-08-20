@@ -37,7 +37,7 @@ the Workbench runtime so Workbench itself manages that folder structure.
    Mechanical operation, run this explicit prerequisite command:
 
    ```text
-   /Users/hanne/Documents/Developer/ANSYS_Doku/ansys-mechanical-mcp/scripts/ensure-ansys-mechanical-runtime
+   @REPO_DIR@/scripts/ensure-ansys-mechanical-runtime
    ```
 
    This command starts or reuses the VM, verifies SSH, starts or reuses the
@@ -59,13 +59,13 @@ the Workbench runtime so Workbench itself manages that folder structure.
 For a Mechanical system that lives inside a Workbench project, run:
 
 ```text
-/Users/hanne/Documents/Developer/ANSYS_Doku/ansys-mechanical-mcp/scripts/ensure-ansys-workbench-mechanical-runtime '<windows-wbpj-path>' '<system-name>'
+@REPO_DIR@/scripts/ensure-ansys-workbench-mechanical-runtime '<windows-wbpj-path>' '<system-name>'
 ```
 
 Example:
 
 ```text
-.../scripts/ensure-ansys-workbench-mechanical-runtime 'C:\Users\hanne\Documents\Mechanical\02_GFB\01_Workbench\GFB_Project.wbpj' 'SYS'
+.../scripts/ensure-ansys-workbench-mechanical-runtime 'C:\Users\<windows-user>\Documents\Mechanical\<project>\GFB_Project.wbpj' 'SYS'
 ```
 
 It starts the Workbench GUI with its own gRPC server, opens the project,
@@ -129,7 +129,7 @@ Rules specific to this path:
 
 Full architecture, the source-verified `-E` launch mechanism, and all known
 caveats are in
-`/Users/hanne/Documents/Developer/ANSYS_Doku/ansys-mechanical-mcp/docs/workbench-integration.md`.
+`@REPO_DIR@/docs/workbench-integration.md`.
 
 ## Windows-only file paths
 
@@ -200,5 +200,5 @@ For CAD import, request the `geometry` guideline. `open_project` is for
   Keep the installed MCP's existing exit behavior unchanged.
 
 For setup diagnosis or reconstruction, consult
-`/Users/hanne/Documents/Developer/ANSYS_Doku/ansys-mechanical-mcp/README.md`
+`@REPO_DIR@/README.md`
 and the private setup guide referenced there.

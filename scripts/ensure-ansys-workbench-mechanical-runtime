@@ -25,6 +25,7 @@ VENV_PYTHON="${REPO_DIR}/.venv/bin/python"
 SSH_HOST="${ANSYS_MECHANICAL_SSH_HOST:-ansys-mechanical-vm}"
 PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
 PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
+ANSYS_VERSION="${ANSYS_VERSION:-251}"
 WB_GRPC_PORT="${ANSYS_WORKBENCH_GRPC_PORT:-51000}"
 MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
 SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
@@ -129,7 +130,24 @@ log "Ensuring Workbench GUI is running with its project-schematic gRPC server on
 # stop the script and the exit code does not reflect the failure. -File gives
 # normal script semantics, where a throw terminates and sets a failing exit
 # code that the `||` below can see.
-REMOTE_BOOTSTRAP='C:/Users/hanne/AppData/Local/Temp/Start-AnsysWorkbenchGrpc.ps1'
+# The Windows temp directory is per-user, so ask the VM for it rather than
+# baking a username into this script. `-Command $env:TEMP` needs no quoting on
+# either side, which keeps it robust across the Mac shell and the remote cmd.exe
+# that ssh hands the command to. PowerShell accepts forward slashes, and
+# converting to them avoids the \U mangling zsh would otherwise do later.
+WINDOWS_TEMP="${ANSYS_WINDOWS_TEMP:-}"
+if [[ -z "${WINDOWS_TEMP}" ]]; then
+  WINDOWS_TEMP="$(ssh -o BatchMode=yes "${SSH_HOST}" \
+    'powershell.exe -NoLogo -NoProfile -NonInteractive -Command $env:TEMP' | tr -d '\r')" \
+    || fail "Could not determine the Windows temp directory on '${SSH_HOST}'"
+fi
+WINDOWS_TEMP="${WINDOWS_TEMP%%$'\n'*}"
+[[ -n "${WINDOWS_TEMP}" ]] \
+  || fail "The Windows temp directory came back empty from '${SSH_HOST}'; set ANSYS_WINDOWS_TEMP to override"
+WINDOWS_TEMP="${${WINDOWS_TEMP//\\//}%/}"
+REMOTE_BOOTSTRAP="${WINDOWS_TEMP}/Start-AnsysWorkbenchGrpc.ps1"
+log "Windows temp directory: ${WINDOWS_TEMP}"
+
 scp -q "${WINDOWS_BOOTSTRAP}" "${SSH_HOST}:${REMOTE_BOOTSTRAP}" \
   || fail "Could not copy the Workbench bootstrap script to Windows"
 # PowerShell accepts forward slashes in paths, so no backslash conversion is
@@ -144,7 +162,7 @@ scp -q "${WINDOWS_BOOTSTRAP}" "${SSH_HOST}:${REMOTE_BOOTSTRAP}" \
 # view into the Windows-side waits, so they get elapsed-time prefixes too.
 # `set -o pipefail` (above) keeps the ssh exit code authoritative for the `||`.
 ssh -o BatchMode=yes "${SSH_HOST}" \
-  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS}" 2>&1 | stamp \
+  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS} -AnsysVersion ${ANSYS_VERSION}" 2>&1 | stamp \
   || fail "Windows could not start or verify the Workbench gRPC server"
 mark "workbench grpc up"
 

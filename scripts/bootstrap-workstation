@@ -58,10 +58,26 @@ log "Applying the remote-path patch to the official MCP"
   || fail "Could not apply the remote-path patch"
 
 # --------------------------------------------------------------------- skill
+# An agent skill has to name the runtime scripts by absolute path -- it has no
+# working directory to resolve them against -- so the tracked file is a
+# template and the machine-specific copy is generated here. Only @REPO_DIR@ is
+# substituted; keeping it to one token means the template stays readable and a
+# missed substitution is easy to spot.
+SKILL_TEMPLATE="${REPO_DIR}/skills/ansys-mechanical/SKILL.md.in"
+SKILL_SOURCE="${REPO_DIR}/skills/ansys-mechanical/SKILL.md"
+[[ -r "${SKILL_TEMPLATE}" ]] || fail "Skill template missing: ${SKILL_TEMPLATE}"
+
+log "Generating the skill for this clone: ${REPO_DIR}"
+sed -e "s|@REPO_DIR@|${REPO_DIR}|g" "${SKILL_TEMPLATE}" > "${SKILL_SOURCE}.tmp" \
+  || fail "Could not generate ${SKILL_SOURCE}"
+if grep -q '@REPO_DIR@' "${SKILL_SOURCE}.tmp"; then
+  rm -f "${SKILL_SOURCE}.tmp"
+  fail "Unsubstituted @REPO_DIR@ left in the generated skill"
+fi
+mv -f "${SKILL_SOURCE}.tmp" "${SKILL_SOURCE}"
+
 # Symlinked, not copied, so the repository stays the single source of truth
 # and every agent sees edits immediately.
-SKILL_SOURCE="${REPO_DIR}/skills/ansys-mechanical/SKILL.md"
-[[ -r "${SKILL_SOURCE}" ]] || fail "Skill file missing: ${SKILL_SOURCE}"
 
 for agent_dir in "${HOME}/.claude/skills" "${HOME}/.codex/skills"; do
   agent_name="${agent_dir:h:t}"

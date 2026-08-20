@@ -55,7 +55,7 @@ process.
 
 ```bash
 scripts/ensure-ansys-workbench-mechanical-runtime \
-  'C:\Users\hanne\Documents\Mechanical\02_GFB\01_Workbench\GFB_Project.wbpj' \
+  'C:\Users\<windows-user>\Documents\Mechanical\<project>\GFB_Project.wbpj' \
   'SYS'
 ```
 
