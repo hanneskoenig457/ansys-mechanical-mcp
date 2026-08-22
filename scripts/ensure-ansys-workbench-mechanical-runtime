@@ -28,15 +28,20 @@ PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.
 ANSYS_VERSION="${ANSYS_VERSION:-251}"
 WB_GRPC_PORT="${ANSYS_WORKBENCH_GRPC_PORT:-51000}"
 MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
+PREWARM_ONLY="${ANSYS_WORKBENCH_PREWARM_ONLY:-0}"
 SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
 WB_WAIT_SECONDS="${ANSYS_WORKBENCH_START_WAIT_SECONDS:-180}"
+LICENSE_PORT="${ANSYS_LICENSE_PORT:-1055}"
+LICENSING_CLIENT_PORT="${ANSYS_LICENSING_CLIENT_PORT:-1084}"
+LICENSING_STABILITY_SECONDS="${ANSYS_LICENSING_STABILITY_SECONDS:-20}"
 TUNNEL_WAIT_SECONDS="${ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS:-30}"
 CONTROL_DIR="${TMPDIR:-/tmp}/ansys-mechanical-mcp-${UID}"
 CONTROL_SOCKET="${CONTROL_DIR}/ssh-control"
 
-# Windows path to the .wbpj to open, and the internal system name (from
-# GetAllSystems() inside Workbench -- NOT the schematic display letter such
-# as "B"; query it once with run_script_string if unknown).
+# Windows path to the .wbpj to open. The internal Mechanical system name is
+# optional: when omitted, the script discovers the one system that contains
+# both Model and Solution components. An explicit name remains available for
+# projects with more than one Mechanical system.
 PROJECT_PATH="${1:-${ANSYS_WORKBENCH_PROJECT_PATH:-}}"
 SYSTEM_NAME="${2:-${ANSYS_WORKBENCH_SYSTEM_NAME:-}}"
 
@@ -86,10 +91,13 @@ summary() {
 
 trap 'summary' EXIT
 
-[[ -n "${PROJECT_PATH}" ]] || fail "Usage: $0 <windows-wbpj-path> <system-name> (or set ANSYS_WORKBENCH_PROJECT_PATH / ANSYS_WORKBENCH_SYSTEM_NAME)"
-[[ -n "${SYSTEM_NAME}" ]] || fail "System name required. Unknown? Run this script once with any placeholder, then call GetAllSystems() via run_script_string over the Workbench port to discover it."
+if [[ "${PREWARM_ONLY}" != "1" ]]; then
+  [[ -n "${PROJECT_PATH}" ]] || fail "Usage: $0 <windows-wbpj-path> [system-name] (or set ANSYS_WORKBENCH_PROJECT_PATH / optional ANSYS_WORKBENCH_SYSTEM_NAME)"
+fi
 [[ -r "${WINDOWS_BOOTSTRAP}" ]] || fail "Windows bootstrap script not found: ${WINDOWS_BOOTSTRAP}"
-[[ -x "${VENV_PYTHON}" ]] || fail "venv python not found at ${VENV_PYTHON}; run 'pip install ansys-workbench-core' in it first"
+if [[ "${PREWARM_ONLY}" != "1" ]]; then
+  [[ -x "${VENV_PYTHON}" ]] || fail "venv python not found at ${VENV_PYTHON}; run 'pip install ansys-workbench-core' in it first"
+fi
 
 mkdir -p "${CONTROL_DIR}"
 chmod 700 "${HOME}/.ssh" "${CONTROL_DIR}"
@@ -103,8 +111,12 @@ if command -v prlctl >/dev/null 2>&1; then
     log "Reusing running Parallels VM: ${PARALLELS_VM}"
   fi
   if [[ -d "${PARALLELS_VM_BUNDLE}" ]]; then
-    open -a "Parallels Desktop" "${PARALLELS_VM_BUNDLE}" >&2 \
-      || log "WARNING: VM is running, but the Parallels console could not be opened"
+    # LaunchServices can wait indefinitely when this script is called from a
+    # compiled AppleScript app, even though Parallels and the VM already run.
+    # Opening the console is visual best-effort only; keep lifecycle readiness
+    # tied to prlctl/SSH rather than to the macOS GUI activation round-trip.
+    { open -a "Parallels Desktop" "${PARALLELS_VM_BUNDLE}" >&2 \
+        || log "WARNING: VM is running, but the Parallels console could not be opened" } &!
   fi
 fi
 mark "vm running"
@@ -162,7 +174,7 @@ scp -q "${WINDOWS_BOOTSTRAP}" "${SSH_HOST}:${REMOTE_BOOTSTRAP}" \
 # view into the Windows-side waits, so they get elapsed-time prefixes too.
 # `set -o pipefail` (above) keeps the ssh exit code authoritative for the `||`.
 ssh -o BatchMode=yes "${SSH_HOST}" \
-  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS} -AnsysVersion ${ANSYS_VERSION}" 2>&1 | stamp \
+  "powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${REMOTE_BOOTSTRAP} -GrpcPort ${WB_GRPC_PORT} -StartupWaitSeconds ${WB_WAIT_SECONDS} -LicensePort ${LICENSE_PORT} -LicensingClientPort ${LICENSING_CLIENT_PORT} -LicensingStabilitySeconds ${LICENSING_STABILITY_SECONDS} -AnsysVersion ${ANSYS_VERSION} -ProjectPath \"${PROJECT_PATH}\"" 2>&1 | stamp \
   || fail "Windows could not start or verify the Workbench gRPC server"
 mark "workbench grpc up"
 
@@ -186,6 +198,13 @@ if ! lsof -nP -iTCP:"${WB_GRPC_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 mark "ssh tunnel established"
 
+if [[ "${PREWARM_ONLY}" == "1" ]]; then
+  mark "generic MCP warm state ready"
+  print -- "Ansys MCP warm state is ready: VM, interactive Windows session, licensing, blank/reused Workbench, SSH control connection, and Workbench tunnel at 127.0.0.1:${WB_GRPC_PORT}."
+  print -- "No project or Mechanical system was opened. The AI can now open the requested model and establish the Mechanical endpoint on demand."
+  exit 0
+fi
+
 # start_mechanical_server() is not idempotent: each call replaces the running
 # Mechanical process for that system, killing any session a client is already
 # using. So if the standard endpoint already serves a live Mechanical, stop
@@ -197,34 +216,109 @@ import sys, warnings
 warnings.filterwarnings("ignore")
 from ansys.mechanical.core import connect_to_mechanical
 
-mech = connect_to_mechanical(ip="127.0.0.1", port=int(sys.argv[1]), transport_mode="insecure")
+mech = connect_to_mechanical(
+    ip="127.0.0.1",
+    port=int(sys.argv[1]),
+    transport_mode="insecure",
+    connect_timeout=8,
+)
 # Touch the session so a merely-open socket does not count as alive.
 mech.run_python_script("1")
 PYEOF
   then
     mark "existing mechanical reused"
+    if [[ -n "${SYSTEM_NAME}" ]]; then
+      REUSED_SYSTEM_DESCRIPTION="system '${SYSTEM_NAME}'"
+    else
+      REUSED_SYSTEM_DESCRIPTION="the already running project system"
+    fi
     print -- "Mechanical already reachable at 127.0.0.1:${MECH_LOCAL_PORT}; kept as-is (transport mode: insecure)"
-    print -- "Set ANSYS_WORKBENCH_FORCE_RESTART=1 to replace it with a new server for system '${SYSTEM_NAME}'."
+    print -- "Set ANSYS_WORKBENCH_FORCE_RESTART=1 to replace ${REUSED_SYSTEM_DESCRIPTION} with a new server."
     exit 0
   fi
   log "127.0.0.1:${MECH_LOCAL_PORT} is open but not serving a live Mechanical; starting a new server"
 fi
 
-log "Opening project and starting the Mechanical server for system '${SYSTEM_NAME}' (this can take a minute)"
-MECH_PORT="$(
+if [[ -n "${SYSTEM_NAME}" ]]; then
+  log "Opening project and starting the Mechanical server for explicitly selected system '${SYSTEM_NAME}' (this can take a minute)"
+else
+  log "Opening project, discovering its Mechanical system, and starting that server (this can take a minute)"
+fi
+MECH_SERVER_RESULT="$(
   "${VENV_PYTHON}" - "${WB_GRPC_PORT}" "${PROJECT_PATH}" "${SYSTEM_NAME}" <<'PYEOF'
-import sys, warnings
+import json
+import ntpath
+import sys
+import warnings
+
 warnings.filterwarnings("ignore")
 from ansys.workbench.core import connect_workbench
 
-wb_port, project_path, system_name = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+wb_port, project_path, requested_system_name = int(sys.argv[1]), sys.argv[2], sys.argv[3]
 wb = connect_workbench(port=wb_port, host="127.0.0.1", security="insecure")
-wb.run_script_string(f'Open(FilePath=r"{project_path}")')
+
+current_project = wb.run_script_string(
+    "import json\nwb_script_result=json.dumps(GetProjectFile())"
+)
+if ntpath.normcase(ntpath.normpath(current_project or "")) != ntpath.normcase(
+    ntpath.normpath(project_path)
+):
+    escaped_project_path = project_path.replace('"', '\\"')
+    wb.run_script_string(f'Open(FilePath=r"{escaped_project_path}")')
+
+systems_result = wb.run_script_string(
+    "import json\n"
+    "systems=[]\n"
+    "for system in GetAllSystems():\n"
+    "    components=[component.Name for component in system.Components]\n"
+    "    systems.append({'name':system.Name,'display_text':system.DisplayText,'components':components})\n"
+    "wb_script_result=json.dumps(systems)"
+)
+# PyWorkbench 0.14 decodes wb_script_result JSON before returning it, while
+# older clients may return the JSON text. Accept both without version guesses.
+systems = json.loads(systems_result) if isinstance(systems_result, str) else systems_result
+mechanical_systems = [
+    system
+    for system in systems
+    if "Model" in system["components"] and "Solution" in system["components"]
+]
+
+if requested_system_name:
+    matches = [system for system in mechanical_systems if system["name"] == requested_system_name]
+    if not matches:
+        available = ", ".join(
+            f"{system['name']} ({system['display_text']})" for system in mechanical_systems
+        ) or "none"
+        raise RuntimeError(
+            f"Requested system {requested_system_name!r} is not a Mechanical system. "
+            f"Available Mechanical systems: {available}"
+        )
+    selected_system = matches[0]
+elif len(mechanical_systems) == 1:
+    selected_system = mechanical_systems[0]
+elif not mechanical_systems:
+    raise RuntimeError(
+        "No Workbench system containing both Model and Solution was found in the project."
+    )
+else:
+    available = ", ".join(
+        f"{system['name']} ({system['display_text']})" for system in mechanical_systems
+    )
+    raise RuntimeError(
+        "More than one Mechanical system was found; pass the desired internal system name "
+        f"as argument 2 or ANSYS_WORKBENCH_SYSTEM_NAME. Candidates: {available}"
+    )
+
+system_name = selected_system["name"]
 mech_port = wb.start_mechanical_server(system_name=system_name)
-print(mech_port)
+print(f"{system_name}\t{mech_port}")
 PYEOF
 )" || fail "PyWorkbench could not open the project or start the Mechanical server"
 
+SYSTEM_NAME="${MECH_SERVER_RESULT%%$'\t'*}"
+MECH_PORT="${MECH_SERVER_RESULT#*$'\t'}"
+[[ -n "${SYSTEM_NAME}" && "${MECH_SERVER_RESULT}" == *$'\t'* ]] \
+  || fail "Did not get a system name and Mechanical port back from PyWorkbench (got: '${MECH_SERVER_RESULT}')"
 [[ "${MECH_PORT}" == <1-65535> ]] || fail "Did not get a valid Mechanical port back from PyWorkbench (got: '${MECH_PORT}')"
 mark "project opened + mechanical started"
 log "Mechanical server for system '${SYSTEM_NAME}' is listening on Windows port ${MECH_PORT}"

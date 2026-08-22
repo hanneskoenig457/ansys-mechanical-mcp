@@ -1,0 +1,16 @@
+#!/bin/zsh
+
+# Deterministic generic warm-state entry point. It starts the VM only on
+# demand, relies on Windows autologon for visible Session 1, prepares licensing
+# and blank Workbench, and opens the managed SSH/Workbench tunnel. It never
+# chooses or opens a project and never starts a Mechanical system.
+
+set -eu
+set -o pipefail
+
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export ANSYS_WORKBENCH_PREWARM_ONLY=1
+unset ANSYS_WORKBENCH_PROJECT_PATH ANSYS_WORKBENCH_SYSTEM_NAME
+
+SCRIPT_DIR="${0:A:h}"
+exec "${SCRIPT_DIR}/ensure-ansys-workbench-mechanical-runtime"

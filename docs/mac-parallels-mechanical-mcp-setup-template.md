@@ -100,6 +100,15 @@ Do not put a password or private-key material in the starter, Codex arguments,
 or this repository. `scripts/start-ansys-mechanical-mcp` is deliberately a
 separate, side-effect-free launcher for the official stdio server.
 
+For a Workbench-managed project, use
+`scripts/ensure-ansys-workbench-mechanical-runtime '<wbpj>' ['<system>']`.
+The system name is optional when exactly one Workbench system contains both
+Model and Solution components. For a generic warm state, use the project-neutral
+`Ansys MCP Ready.app`; it starts no project or Mechanical system. No Ansys task
+should have an at-logon trigger. Keep Windows autologon a separate security
+decision; for a real password use Microsoft's Sysinternals Autologon
+interactively and never automate the credential through SSH.
+
 ## 5. Register the official stdio server
 
 ```bash

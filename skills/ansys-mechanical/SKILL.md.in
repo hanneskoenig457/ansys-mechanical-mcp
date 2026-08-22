@@ -1,6 +1,6 @@
 ---
 name: ansys-mechanical
-description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, CAD/NX geometry import into Mechanical, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
+description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, CAD/NX geometry import into Mechanical, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Also use it to explain what a Mechanical feature, setting, or scripting API object does — contact formulations, element technology, boundary conditions, solver settings, result types — since those answers must be looked up in the official Ansys documentation rather than recalled. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
 ---
 
 # Ansys Mechanical
@@ -8,6 +8,68 @@ description: Operate Ansys Mechanical through the globally configured official P
 Use the official `ansys-mechanical` MCP as the primary interface. It runs on
 the Mac and connects through a loopback-only SSH tunnel to Mechanical 2025 R1
 in the Parallels Windows VM.
+
+## Answer engineering questions from the documentation, not from memory
+
+**The rule, and it is not optional.** Whenever the user asks what a Mechanical
+feature does, which setting to choose, or how the application behaves — contact
+formulations and behaviors, element technology, mesh controls,
+boundary-condition semantics, solver and convergence settings, result
+definitions, add-on capabilities, or any scripting API object — read the
+official 2025 R1 documentation before answering. This covers pure explanation
+requests ("explain the contact formulations that make sense here"), which need
+no Mechanical connection at all. Recalling Ansys behavior instead of looking it
+up is the single failure this section exists to prevent: an answer that sounds
+right and is subtly wrong costs the user a wrong model, not a wrong sentence.
+
+**The mechanism**, which is the part worth remembering exactly:
+
+```text
+@REPO_DIR@/scripts/ansys-docs.py search "<terms>"
+@REPO_DIR@/scripts/ansys-docs.py read <doc id> [<doc id> …]
+```
+
+`search` prints ranked hits, each with a snippet and a document id. `read`
+prints the full text of those pages — pass several ids at once, it is one
+request. Both default to the Mechanical Application at release 25.1, the
+release installed here. Flags: `--manual`, `--product`, `-n`, `--product all`
+and `--all-versions` to widen; subcommands `manuals` and `products` list what a
+scope contains.
+
+**Everything else is your judgment.** How many searches, which manuals, which
+pages, when you know enough — decide that per question rather than following a
+fixed recipe. What is worth knowing when you decide:
+
+- Pages are short. Most run 500–1500 tokens, few exceed 8000. Reading four or
+  five is genuinely cheap, so prefer reading more pages over answering from a
+  snippet — a snippet is a pointer, not a source.
+- Unscoped ranking is mediocre. `search "contact formulation"` puts an Explicit
+  Dynamics page above `9.6.2. Contact Formulation Theory`; the same query with
+  `--manual "Mechanical User's Guide"` ranks it first. When results look off,
+  narrowing the manual usually fixes it faster than rephrasing.
+- The Mechanical User's Guide is the canonical source for feature behavior;
+  `Mechanical Object Reference` and `Scripting in Mechanical Guide` for the
+  API; Mechanical APDL is a **separate product** for solver-level behavior
+  behind a Workbench setting. Run `manuals` if unsure what a scope holds.
+- Query in Ansys terminology, not the user's sentence. Conversational filler
+  ("which settings should I use here") pulls in noise.
+- Documentation pages cross-reference each other by section number. Following
+  those into a second `read` is usually the fastest way to a complete answer.
+- Name the manual and section you used and give the URL, so the user can check.
+  Keep what the documentation states separate from your own engineering
+  recommendation for their model — both are useful, conflating them is not.
+- `get_guidelines_for` and this script answer different questions:
+  `get_guidelines_for` gives the ExtAPI patterns for *writing* a script;
+  `ansys-docs.py` gives the product documentation for *what a feature means*.
+  A scripting task often needs both.
+- If the lookup fails, say the documentation was unavailable and answer from
+  the offline help installed with Ansys in the VM — or state plainly that you
+  could not verify it. Never fill the gap with a plausible-sounding
+  recollection of Ansys behavior.
+
+The script talks to an undocumented Solr endpoint behind `ansyshelp.ansys.com`;
+`docs/ansys-help-documentation-lookup.md` records how it works, which Solr
+parameters are unusable on it, and what to do if Ansys changes it.
 
 ## Pick the right runtime first
 
@@ -54,6 +116,26 @@ the Workbench runtime so Workbench itself manages that folder structure.
    connection from earlier in the chat is still alive; if it is not, redo
    steps 2-4 instead of letting a mid-task tool call fail first.
 
+## Project-neutral readiness
+
+If the user asks only to prepare Ansys/MCP readiness, warm the environment, or
+start the session **without naming a model**, run:
+
+```text
+@REPO_DIR@/scripts/prepare-ansys-mcp-ready
+```
+
+This is the command behind `Ansys MCP Ready.app`. It may start the stopped VM,
+wait for the configured Windows autologon, repair/verify licensing, start one
+blank visible Workbench, and establish the Workbench tunnel on
+`127.0.0.1:51000`. It must not choose or open a project, start a Mechanical
+system, or claim port `50053`. It is safe to invoke concurrently: callers
+converge on the same Workbench server.
+
+Do not substitute a project-specific path merely because a previous task used
+one. A later, explicit model request uses the workflow below and is the only
+point where the project and Mechanical endpoint are selected.
+
 ## Workbench-managed projects (`.wbpj`)
 
 For a Mechanical system that lives inside a Workbench project, run:
@@ -76,8 +158,11 @@ MCP reconfiguration.
 On a cold VM boot this takes several minutes: the script waits for the Windows
 sign-in, then for the FlexNet licensing daemons, restarting the licensing
 service itself if they do not appear. Let it run rather than interrupting it.
-The user must sign in to Windows in the Parallels console — a GUI cannot start
-without an interactive session, and the script says so if one is missing.
+The reference VM uses Sysinternals Autologon to create the interactive console
+session after an explicit app/AI start; no Ansys task runs at logon. On another
+machine without autologon, the user must sign in in the Parallels console. A
+GUI cannot start without that interactive session, and the script fails
+explicitly if one is missing.
 
 Rules specific to this path:
 

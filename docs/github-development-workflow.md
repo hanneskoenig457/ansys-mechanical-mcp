@@ -1,5 +1,12 @@
 # Reusable GitHub project operating system
 
+The executable agent contract is packaged in
+[`skills/cae-project-ops`](../skills/cae-project-ops/SKILL.md), with the concise
+GitHub rules in its
+[`github-workflow.md`](../skills/cae-project-ops/references/github-workflow.md)
+reference. This document remains the expanded rationale and reusable operating
+model.
+
 This document defines a project method that can be copied into a new software,
 engineering, research, documentation, or creative project. It is designed for
 human/AI collaboration where work must remain reviewable across chats,

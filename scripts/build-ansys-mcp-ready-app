@@ -1,0 +1,29 @@
+#!/bin/zsh
+
+# Build the small double-clickable generic Ansys MCP warm-state app.
+
+set -eu
+set -o pipefail
+
+SCRIPT_DIR="${0:A:h}"
+TEMPLATE="${SCRIPT_DIR}/macos/Ansys-MCP-Ready.applescript.in"
+LAUNCHER="${SCRIPT_DIR}/prepare-ansys-mcp-ready"
+OUTPUT_APP="${1:-${HOME}/Applications/Ansys MCP Ready.app}"
+
+[[ -r "${TEMPLATE}" ]] || { print -u2 -- "Template not found: ${TEMPLATE}"; exit 1; }
+[[ -x "${LAUNCHER}" ]] || { print -u2 -- "Launcher is not executable: ${LAUNCHER}"; exit 1; }
+command -v osacompile >/dev/null 2>&1 || { print -u2 -- "osacompile is unavailable"; exit 1; }
+
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ansys-mcp-ready-app.XXXXXX")"
+trap 'rm -rf "${TEMP_DIR}"' EXIT
+GENERATED_SOURCE="${TEMP_DIR}/Ansys-MCP-Ready.applescript"
+
+escaped_launcher="${LAUNCHER//\/\\}"
+escaped_launcher="${escaped_launcher//\"/\\\"}"
+sed "s|@LAUNCHER_PATH@|${escaped_launcher}|g" "${TEMPLATE}" > "${GENERATED_SOURCE}"
+
+mkdir -p "${OUTPUT_APP:h}"
+osacompile -o "${OUTPUT_APP}" "${GENERATED_SOURCE}"
+codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null
+
+print -- "Built ${OUTPUT_APP}"

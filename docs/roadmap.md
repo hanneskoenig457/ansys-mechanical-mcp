@@ -52,11 +52,13 @@ against a harmless model. See
 
 ## Reusable project-method track
 
-Extract the GitHub issue/project/PR/handoff conventions into a reusable project
-operating system. The tracked reference is
-[github-development-workflow.md](github-development-workflow.md). A future
-Codex skill can package that method after its desired global or project-local
-installation location is chosen.
+Completed on 2026-08-23: the GitHub issue/project/PR/handoff conventions and a
+modular CAE documentation structure are packaged in the reusable
+[`cae-project-ops`](../skills/cae-project-ops/SKILL.md) skill. Its source is
+tracked in this repository and the workstation bootstrap links the same source
+into current Codex discovery, legacy Codex installations, and Claude. The
+expanded rationale remains in
+[github-development-workflow.md](github-development-workflow.md).
 
 ## Decision gate for custom development
 

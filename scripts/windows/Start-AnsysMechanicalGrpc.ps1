@@ -53,7 +53,6 @@ $principal = New-ScheduledTaskPrincipal `
     -UserId $userId `
     -LogonType Interactive `
     -RunLevel Limited
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
@@ -65,16 +64,14 @@ if ($null -eq $existingTask) {
         -TaskName $TaskName `
         -Action $action `
         -Principal $principal `
-        -Trigger $trigger `
         -Settings $settings `
-        -Description "Starts Ansys Mechanical 2025 R1 with a dedicated local gRPC endpoint on port $GrpcPort." `
+        -Description "On-demand launcher for Ansys Mechanical $AnsysVersion with a dedicated local gRPC endpoint on port $GrpcPort. Intentionally has no trigger." `
         -ErrorAction Stop | Out-Null
 } else {
     Set-ScheduledTask `
         -TaskName $TaskName `
         -Action $action `
         -Principal $principal `
-        -Trigger $trigger `
         -Settings $settings `
         -ErrorAction Stop | Out-Null
 }

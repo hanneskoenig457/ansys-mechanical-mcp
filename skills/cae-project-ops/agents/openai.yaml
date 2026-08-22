@@ -1,0 +1,4 @@
+interface:
+  display_name: "CAE Project Ops"
+  short_description: "Struktur, Doku, Cleanup und GitHub für CAE"
+  default_prompt: "Use $cae-project-ops to structure and maintain this CAE project."
