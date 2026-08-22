@@ -34,6 +34,10 @@
 
 ## Next: exercise official capabilities deliberately
 
+Execution and evidence are tracked in
+[issue #23](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/23);
+this section preserves the stable outcome sequence.
+
 1. Capture a structured status/model-info baseline from the official tools.
 2. Inventory which v0.2.0 tools behave correctly with Mechanical 2025 R1 over
    the tunnel.
@@ -49,6 +53,11 @@ Its goal is no longer to add MCP tools. It should use official tools plus
 reviewed Mechanical scripts, with each engineering mutation and result checked
 against a harmless model. See
 [steady-state-thermal-workflow.md](steady-state-thermal-workflow.md).
+
+Future geometry automation is intentionally a separate research decision in
+[issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24).
+The repository will not codify PyAnsys Geometry as the preferred method until a
+small official, reproducible workflow is validated.
 
 ## Reusable project-method track
 

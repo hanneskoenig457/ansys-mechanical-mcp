@@ -250,6 +250,22 @@ than automatically inheriting this Mac-side server.
 - [Reusable GitHub project workflow](docs/github-development-workflow.md)
 - [Reusable CAE project operations skill](skills/cae-project-ops/SKILL.md)
 
+## GitHub work tracking
+
+Repository Markdown records the current validated setup. Proposed and active
+work is tracked in GitHub rather than duplicated as a chat-only or local task
+list:
+
+- [Ansys Mechanical MCP Toolchain Project](https://github.com/users/hanneskoenig457/projects/4)
+- [Official MCP capability audit](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/23)
+- [PyAnsys Geometry evaluation](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24)
+- [Optional Workbench “Open for MCP” idea](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/25)
+- [Separate staged thermal workflow Project](https://github.com/users/hanneskoenig457/projects/3)
+
+The first three Project items are deliberately different: a committed
+capability audit, a bounded research decision, and an uncommitted idea. Their
+status must not be inferred from their presence on the board.
+
 ## Operating boundary
 
 Mechanical 2025 R1 without SP04 supports only insecure gRPC. In this setup,
