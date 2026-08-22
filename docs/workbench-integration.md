@@ -55,24 +55,25 @@ process.
 
 ```bash
 scripts/ensure-ansys-workbench-mechanical-runtime \
+  'C:\Users\<windows-user>\Documents\Mechanical\<project>\GFB_Project.wbpj'
+```
+
+The runtime now discovers the system itself. It selects the one system whose
+components contain both `Model` and `Solution`, which excludes geometry-only
+systems. If there is exactly one match, no system argument or preliminary
+query is needed. For a project with multiple Mechanical systems, pass the
+desired **internal** Workbench name as argument 2:
+
+```bash
+scripts/ensure-ansys-workbench-mechanical-runtime \
   'C:\Users\<windows-user>\Documents\Mechanical\<project>\GFB_Project.wbpj' \
   'SYS'
 ```
 
-The system name is the **internal** Workbench name from `GetAllSystems()`,
-not the schematic display letter (e.g. Mechanical's own outline may show
-`B: Steady-State Thermal`, while `GetAllSystems()` for the same system
-returns `SYS`). If it's unknown, run the script once with any placeholder
-name to get the Workbench server up, then query it directly:
-
-```python
-from ansys.workbench.core import connect_workbench
-wb = connect_workbench(port=51000, host="127.0.0.1", security="insecure")
-wb.run_script_string(
-    'import json\n'
-    'wb_script_result = json.dumps([s.Name for s in GetAllSystems()])'
-)
-```
+Discovery still uses Workbench's official `GetAllSystems()` scripting API
+internally, but the former manual discovery run has been removed. The script
+also validates explicit names and reports all eligible candidates when the
+choice is ambiguous.
 
 After the script prints `Mechanical (Workbench system '...') ready at
 127.0.0.1:50053`, use the official MCP tools exactly as with a standalone
@@ -140,10 +141,13 @@ serve licences -- `lmgrd` and `ansyslmd` -- were observed appearing about
 3. Mechanical falling back to **read-only** mode if it is opened at all.
 
 `Start-AnsysWorkbenchGrpc.ps1` therefore waits for an interactive console
-session, a network adapter that is up, and both FlexNet daemons (confirmed
-with `ansysli_util -liclist` when available) before launching anything. That
-wait has its own budget, `ANSYS_WORKBENCH_READY_WAIT_SECONDS` (default 300),
-so it cannot eat into the time allowed for Workbench itself.
+session and network, restarts the licensing stack immediately when no Ansys
+application can hold a licence, requires `lmgrd`, `ansyslmd`, FlexNet port
+`1055`, licensing HTTP port `1084`, and 20 seconds of continuous stability.
+It then performs a real one-second `ANS_WB` checkout with the installed
+official `ansysli_util.exe`. That wait has its own budget,
+`ANSYS_WORKBENCH_READY_WAIT_SECONDS` (default 300), so it cannot eat into the
+time allowed for Workbench itself.
 
 The daemons do **not** come up reliably by themselves on this VM. Observed
 twice: over a minute after boot, `lmgrd` and `ansyslmd` were still absent
@@ -156,21 +160,27 @@ restarting the service:
 Restart-Service "ANSYS, Inc. License Manager CVD" -Force
 ```
 
-`Start-AnsysWorkbenchGrpc.ps1` does this automatically, but only after a 90
-second grace period in which the daemons may still appear on their own, and
-only once. The delay is deliberate: restarting the service while a running
-Ansys application holds a licence throws `Cannot connect to license server
-system` dialogs in that application. It needs an elevated session; the SSH
-login on this VM already is one.
+`Start-AnsysWorkbenchGrpc.ps1` does this automatically as soon as the console
+session and network are ready on a clean cold start. It restarts both
+`ANSYS, Inc. License Manager CVD` and `ANSYSLicensingTomcat`. Concurrent app
+and AI launchers share named licensing and Workbench-launch mutexes, so they
+cannot restart the services twice or launch competing Workbench processes. If
+an Ansys GUI is already running, the immediate restart is suppressed to avoid
+interrupting a licence holder.
 
-Readiness is judged by the licence port (`1055` by default, overridable with
-`ANSYS_LICENSE_PORT`) accepting connections, plus both daemons being present.
-Do not probe `ansysli_util` for this: its option set is not safe to guess at.
-An invented `-liclist` returned `Unknown option` with exit code 1 on every
-call, so the check reported "not ready" forever and blocked startup even
-though licensing was fully working.
+The supported probe is `ansysli_util.exe -checkout ANS_WB -wait 1`; success
+must contain `ANS_WB OUT`. The utility releases the temporary checkout on
+exit. Do not use the nonexistent `-liclist` option.
 
-### Do not give the launcher task a trigger
+The 2025 R1 client was observed checking out `ANS_WB` successfully and then
+crashing with `C0000005` while fetching cache information through its default
+`fnp,web-elastic` path. Workbench then showed modal Client Proxy/licensing
+errors even though Mechanical later obtained a writable FlexNet licence. The
+interactive launcher now scopes `ANSYS_LICENSING_SERVICE_PRIORITY=fnp` to the
+Workbench process. In the validated run, the cache completed in one second,
+with no client crash or modal licence dialogs.
+
+### One triggerless launcher, one explicit coordinator
 
 The scheduled task that launches Workbench must have **no trigger at all**.
 An `-AtLogOn` trigger was tried and is actively harmful: Windows then starts
@@ -179,6 +189,53 @@ up behind the licensing dialog, bypasses every readiness check in this script,
 and leaves stray `RunWB2`/`AnsysWBU` processes behind that later runs then
 trip over. The task exists purely as an elevation/session vehicle that
 `Start-ScheduledTask` invokes once conditions are verified.
+
+There is deliberately no second Ansys task at Windows logon. The explicit
+coordinator is `Ansys MCP Ready.app` (or the equivalent AI runtime command).
+It starts the stopped VM, waits for Windows automatic sign-in and SSH, runs the
+complete session/network/licensing readiness logic, starts exactly one blank
+Workbench, and establishes the loopback tunnel at `127.0.0.1:51000`. It does
+not open a project and does not start Mechanical. A named mutex covers the
+complete check-and-launch section, so concurrent app/AI invocations converge
+on the same Workbench server.
+
+The task needs an interactive Windows console session. Automatic Windows
+logon is intentionally separate because it changes the VM's authentication
+posture. Accounts with real passwords should use Microsoft's Sysinternals
+Autologon interactively so the password never crosses SSH or enters repository
+logs.
+
+The VM itself is another layer. In the reference setup Parallels host-start
+autostart is off; the app or an AI runtime command starts the VM only on demand.
+
+### Validation evidence, 2026-08-22
+
+- Warm task run completed with Task Scheduler result `0`.
+- Workbench and its Mechanical child ran in visible console Session 1.
+- Port `51000` opened only after the readiness checks completed.
+- Workbench opened
+  `C:\Users\hanne\Documents\Mechanical\03_TEG\TEG_Sim.wbpj`.
+- Automatic discovery excluded `Geometry` and selected the unique
+  Thermal-Electric system `SYS`.
+- `start_mechanical_server()` opened Mechanical on Windows port `54229`; the
+  Mac runtime remapped it to `127.0.0.1:50053` in 60 seconds total.
+- A second runtime invocation reused the live Mechanical session in 3 seconds.
+- Sysinternals Autologon produced an active interactive Session 1 after a
+  fully stopped VM was started on demand; Parallels VM autostart stayed off.
+- The clean post-race cold test completed from VM state `stopped` in 2:05.
+  Read-only inspection found exactly one `RunWB2`, one `AnsysFWW`, zero
+  `AnsysWBU`, temporary project `wbnew.wbpj`, zero Workbench systems, no
+  listener on `50053`, and the managed tunnel on `51000`. Two simultaneous
+  follow-up readiness calls both reused it in 1–2 seconds.
+- The app's success path is non-modal. A Notification Center timeout (`-1712`)
+  was initially misreported as a readiness failure after the log had already
+  proved success; the cosmetic completion notification was removed and the
+  rebuilt app now exits silently after success.
+- The final cold run logged `ANSYS_LICENSING_SERVICE_PRIORITY=fnp`, immediate
+  `ANS_WB` checkout, one-second cache retrieval, no `ansyscl` crash, and a
+  Mechanical `ansys` checkout.
+- A Mac PyMechanical check returned `is_alive=True`, version `251`, and the
+  scripting roundtrip `alive` through `127.0.0.1:50053`.
 
 ## Known caveats
 

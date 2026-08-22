@@ -70,8 +70,9 @@ scripts/bootstrap-workstation
 
 It creates `.venv`, installs the pinned requirements from
 [requirements-mac.txt](requirements-mac.txt), reapplies the local MCP patch
-(see below), and symlinks the skill into `~/.claude/skills` and
-`~/.codex/skills`. It then prints the two steps it cannot do for you: the SSH
+(see below), and symlinks the repository skills into `~/.agents/skills`
+(current Codex discovery), `~/.codex/skills` (legacy Codex location), and
+`~/.claude/skills`. It then prints the two steps it cannot do for you: the SSH
 key/host alias (private material) and the agent's MCP registration.
 
 The equivalent manual sequence:
@@ -120,18 +121,52 @@ not reachable, start the runtime that matches the target and then call
 | Target | Runtime starter |
 | --- | --- |
 | Standalone `.mechdb` | `scripts/ensure-ansys-mechanical-runtime` |
-| Workbench `.wbpj` system | `scripts/ensure-ansys-workbench-mechanical-runtime '<wbpj>' '<system>'` |
+| Workbench `.wbpj` system | `scripts/ensure-ansys-workbench-mechanical-runtime '<wbpj>' ['<system>']` |
 
 Both serve the same MCP endpoint `127.0.0.1:50053`, so the MCP registration
 never changes. See
 [Workbench-managed Mechanical access](docs/workbench-integration.md) for the
 second one.
 
+For a Workbench project with exactly one system containing both `Model` and
+`Solution`, the system argument is optional. The runtime discovers and
+validates that system after opening the project. An explicit internal system
+name is required only when a project contains multiple Mechanical systems.
+There is no longer a manual `GetAllSystems()` discovery step.
+
+### On-demand MCP readiness
+
+For a project-neutral warm state, double-click
+`~/Applications/Ansys MCP Ready.app`. It starts the otherwise stopped VM on
+demand, relies on the configured Windows autologon, prepares licensing and a
+blank visible Workbench, and establishes the managed SSH connection plus the
+Workbench tunnel at `127.0.0.1:51000`. It deliberately opens no user project,
+starts no Mechanical system, and therefore does not bind the Mechanical MCP
+endpoint `50053` yet. The AI performs those model-specific steps when an actual
+task arrives. Neither Parallels nor the VM is configured to start with macOS.
+Detailed app output is stored in `~/Library/Logs/Ansys MCP Ready.log`.
+Success is non-modal: the app exits by itself after readiness is proven. Only
+a genuine launcher failure opens an error dialog.
+
+The app is the only coordinator. Windows has no Ansys task triggered at
+logon; only the automatic Windows sign-in occurs when the app starts the VM.
+The app then immediately restarts the Ansys CVD and Licensing Tomcat services
+on a cold start, waits for `lmgrd`, `ansyslmd`, ports `1055`/`1084`, and a
+stability window, and performs a real one-second `ANS_WB` checkout with the
+official `ansysli_util.exe`. The triggerless interactive launcher is also
+protected by a named mutex, so simultaneous app/AI invocations reuse the same
+Workbench instead of competing for port `51000`.
+
+Windows automatic sign-in is configured separately with Microsoft's signed
+Sysinternals Autologon utility; never pass its password through this
+repository, SSH, shell history, or a chat. Parallels and the VM remain excluded
+from macOS login items and Parallels host-start autostart.
+
 The skill in [skills/ansys-mechanical](skills/ansys-mechanical/SKILL.md) applies
-this sequence across projects. It is the single source of truth: both
-`~/.claude/skills/ansys-mechanical/SKILL.md` and
-`~/.codex/skills/ansys-mechanical/SKILL.md` are symlinks to that file, so an
-edit here reaches every agent at once.
+this sequence across projects. It is the single source of truth: the matching
+entries under `~/.agents/skills`, `~/.codex/skills`, and `~/.claude/skills`
+symlink to the repository source, so an edit here reaches Codex and Claude at
+once.
 
 ## Adapting to another machine
 
@@ -150,8 +185,10 @@ does not require editing the scripts.
 | `ANSYS_WORKBENCH_GRPC_PORT` | `51000` | Workbench project-schematic gRPC port |
 | `ANSYS_WINDOWS_TEMP` | auto-detected via `$env:TEMP` | Windows directory the bootstrap script is copied into |
 | `ANSYS_LICENSE_PORT` | `1055` | FlexNet port probed for licensing readiness |
+| `ANSYS_LICENSING_CLIENT_PORT` | `1084` | Local Ansys licensing web endpoint included in readiness |
+| `ANSYS_LICENSING_STABILITY_SECONDS` | `20` | Continuous healthy window before the real `ANS_WB` checkout |
 | `ANSYS_WORKBENCH_PROJECT_PATH` | — | `.wbpj` to open, if not passed as argument 1 |
-| `ANSYS_WORKBENCH_SYSTEM_NAME` | — | Internal system name, if not passed as argument 2 |
+| `ANSYS_WORKBENCH_SYSTEM_NAME` | auto when unique | Internal system name override, if not passed as argument 2 |
 | `ANSYS_WORKBENCH_FORCE_RESTART` | `0` | `1` replaces a live Mechanical server, killing that session |
 
 Timeouts, all in seconds: `ANSYS_MECHANICAL_SSH_WAIT_SECONDS` (180),
@@ -176,14 +213,17 @@ in the VM itself. The bootstrap script prints those as remaining manual steps.
 - `skills/ansys-mechanical/SKILL.md.in` is the committed template; the bootstrap
   script generates `SKILL.md` next to it with this clone's absolute path
   substituted for `@REPO_DIR@`. The generated file is git-ignored, so edit the
-  template. The agent copies under `~/.claude/skills` and `~/.codex/skills` are
-  symlinks to the generated file, recreated by the bootstrap script.
+  template. Skill entries under `~/.agents/skills`, `~/.codex/skills`, and
+  `~/.claude/skills` are symlinked to their repository sources and repaired by
+  the bootstrap script.
 - The Codex MCP entry is durable in the user's Codex configuration until it is
   removed or changed.
 - The dedicated SSH key and `ansys-mechanical-vm` host alias are durable in
   `~/.ssh`; their contents are never committed.
 - Mechanical and the SSH tunnel remain runtime state. The explicit runtime
-  starter recreates them only for a requested Mechanical workflow.
+  starter recreates them only for a requested Mechanical workflow. The
+  project-neutral readiness app can prepare visible blank Workbench and its
+  tunnel on demand without starting Mechanical.
 - `127.0.0.1:50053` on the Mac is the local entrance to the SSH tunnel. The
   tunnel forwards it to `127.0.0.1:50053` inside Windows.
 - The official v0.2.0 server calls `Mechanical.exit()` during MCP shutdown when
@@ -200,6 +240,7 @@ than automatically inheriting this Mac-side server.
 
 - [Deployment architecture](docs/architecture.md)
 - [Workbench-managed Mechanical access](docs/workbench-integration.md)
+- [Documentation lookup against Ansys Help](docs/ansys-help-documentation-lookup.md)
 - [Reusable Mac/Parallels setup template](docs/mac-parallels-mechanical-mcp-setup-template.md)
 - [Official server inventory and boundaries](docs/official-pymechanical-mcp.md)
 - [Live validation workflow](docs/live-validation-workflow.md)
@@ -207,6 +248,7 @@ than automatically inheriting this Mac-side server.
 - [Repository roadmap](docs/roadmap.md)
 - [Steady-state thermal application roadmap](docs/steady-state-thermal-workflow.md)
 - [Reusable GitHub project workflow](docs/github-development-workflow.md)
+- [Reusable CAE project operations skill](skills/cae-project-ops/SKILL.md)
 
 ## Operating boundary
 

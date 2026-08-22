@@ -40,14 +40,14 @@ overrideable through the named environment variables:
 5. the runtime starter waits **30 seconds** for the Mac tunnel endpoint
    (`ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS`).
 
-The Windows task has an **At logon** trigger for the configured user. If the
-user is not logged in before the runtime command times out, the task starts
-Mechanical when the user later logs in. The MCP remains loaded but disconnected;
-rerun the request so the skill can connect after Mechanical appears.
+The low-level standalone Mechanical launcher has no trigger. If the user is
+not logged in, the runtime command fails explicitly; log in and rerun it. This
+avoids an unexpected standalone Mechanical instance competing with an
+explicit Workbench-project runtime.
 
-No Windows automatic login was configured. During the first cold-start test,
-the operator entered the Windows password manually. The At-logon trigger then
-started Mechanical in that interactive desktop.
+No Windows automatic login is assumed by this runbook. The project-neutral
+readiness app is documented separately in `docs/workbench-integration.md`; it
+does not alter the standalone workflow and never opens a model.
 
 SSH is independent of the GUI login. Windows OpenSSH starts as a system service
 and normally becomes reachable before desktop login. The Mechanical task needs
@@ -76,8 +76,8 @@ This setup-level cold-start path has been verified through a direct read-only
 PyMechanical round trip. The final acceptance test from a fully restarted
 ChatGPT/Codex app and an unrelated new local chat remains intentionally open.
 
-If Windows stops at the login screen, log in. Mechanical then starts through
-the At-logon task. Repeat the same status request after Mechanical appears.
+If Windows stops at the login screen, log in and repeat the same status
+request so the runtime starter can trigger Mechanical in that desktop.
 
 ## Test 2: prove the NX file and import API without mutation
 

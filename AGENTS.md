@@ -45,10 +45,16 @@ The former prototype is historical and recoverable from Git before commit
 - Record dates and exact package/Mechanical versions for live evidence.
 - When behavior changes with package versions, verify the installed package and
   current official sources before editing instructions.
+- Use `skills/cae-project-ops` when changing the project structure, closing a
+  substantial multi-file task, cleaning accumulated artifacts, or coordinating
+  issue/PR/Project handoffs. Update affected documentation and classify new
+  files before declaring the task complete.
 
 ## GitHub project workflow
 
-Use `docs/github-development-workflow.md` as the reusable operating model.
+Use `skills/cae-project-ops/references/github-workflow.md` as the concise
+operating contract and `docs/github-development-workflow.md` for the expanded
+explanation.
 GitHub issues are durable work contracts; pull requests carry a reviewable
 change; project statuses represent evidence gates rather than percentage done.
 

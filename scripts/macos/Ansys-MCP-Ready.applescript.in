@@ -1,0 +1,23 @@
+use scripting additions
+
+on run
+    set launcherPath to "@LAUNCHER_PATH@"
+    set logDirectory to (POSIX path of (path to library folder from user domain)) & "Logs"
+    set logPath to logDirectory & "/Ansys MCP Ready.log"
+    try
+        display notification "VM, Windows, Lizenzierung, Workbench und Tunnel werden vorbereitet." with title "Ansys MCP Ready"
+    end try
+
+    try
+        with timeout of 1200 seconds
+            do shell script "/bin/mkdir -p " & quoted form of logDirectory & " && " & quoted form of launcherPath & " > " & quoted form of logPath & " 2>&1"
+        end timeout
+    on error errorMessage number errorNumber
+        display dialog "Die Ansys-Bereitschaft ist fehlgeschlagen (Fehler " & errorNumber & ").\n\nDetails stehen in:\n" & logPath with title "Ansys MCP Ready" buttons {"OK"} default button "OK" with icon stop
+        return
+    end try
+
+    -- Exit silently after success. The log contains the proven ready state;
+    -- a second Notification Center call can itself time out (-1712) and must
+    -- never delay or misreport an otherwise successful warm start.
+end run

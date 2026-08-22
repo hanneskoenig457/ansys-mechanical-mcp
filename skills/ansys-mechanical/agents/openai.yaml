@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ansys Mechanical"
+  short_description: "Mechanical MCP, Workbench und sichere Laufzeit"
+  default_prompt: "Use $ansys-mechanical to inspect or operate this Ansys Mechanical project safely."

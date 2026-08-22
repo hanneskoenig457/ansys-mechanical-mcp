@@ -51,7 +51,7 @@ port, which SSH forwards into Windows.
 | Mechanical connection and scripting | Official PyMechanical package |
 | Model state, solve, results, and entity identity | Running Mechanical instance |
 | Cross-machine confidentiality | SSH tunnel plus VM/firewall containment |
-| Runtime bootstrap | Explicit repository starter and interactive Windows scheduled task |
+| Runtime bootstrap | Explicit repository starter plus triggerless interactive Windows launcher tasks |
 | Cross-project operating order | Global personal `ansys-mechanical` skill |
 | Codex server registration | User-level Codex configuration |
 | Setup, validation, prompts, and project method | This repository |
@@ -65,7 +65,7 @@ Private setup guide    durable, local, ignored by Git
 .venv                  durable, local, reproducible, ignored by Git
 Codex MCP entry        durable user configuration
 SSH alias/key          durable user configuration, outside Git
-Windows start task     durable after first successful bootstrap
+Windows launcher tasks durable, triggerless, updated by runtime starters
 Mechanical process     runtime only
 SSH tunnel process     runtime only, recreated by explicit starter
 MCP stdio process      runtime only, owned by Codex
@@ -87,6 +87,12 @@ deployment accepts explicit `insecure` gRPC only because:
 5. no Windows firewall opening is created for the Mechanical port.
 
 This is a private development topology, not a general remote-service design.
+
+Visible GUI automation remains bounded by Windows session isolation. Runtime
+starters invoke triggerless interactive launcher tasks only after an
+interactive console logon exists; no Ansys task runs merely because Windows
+logged on. Automatic Windows sign-in is a separate, explicit decision and does
+not change the SSH or gRPC containment described above.
 
 ## Lifecycle caveat
 
