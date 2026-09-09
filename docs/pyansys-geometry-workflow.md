@@ -25,8 +25,9 @@ not a CAD-service connection or licence validation.
 | Question | Observation | Consequence |
 | --- | --- | --- |
 | CAD product | SpaceClaim 2025 R1 (`2025.1.0.0`) is installed under Ansys `v251`. | SpaceClaim is the first candidate backend for the visible Workbench path. |
-| Geometry Service/Core | Neither `GeometryService` nor `CoreGeometryService` is installed under `v251`. | Do not plan a local Geometry Service/Core launch for this VM. |
-| Existing API session | No SpaceClaim or Discovery process, API-server artefact, or listener was observed. | A normal SpaceClaim session cannot yet be treated as a PyAnsys Geometry endpoint. |
+| Shared ApiServer | `v251\\Addins\\ApiServer` is installed at build `25.1.0.877`.  Its manifest identifies a Discovery remote API server and its assemblies include Geometry gRPC services plus a v251 provider. | The installed SpaceClaim/Discovery stack has the required API-server component; a running session still has to load it and expose a listener. |
+| Geometry Service/Core | The Ansys installer file map defines `GeometryService` as a component, but no `GeometryService`/`CoreGeometryService` directory, service, registry key, or candidate server executable is present. | Treat the standalone Geometry Service/Core as not installed on this VM; do not plan a local service launch without installing it deliberately. |
+| Existing API session | No SpaceClaim or Discovery process or API listener was observed. | A normal SpaceClaim session cannot yet be treated as a PyAnsys Geometry endpoint, even though its shared ApiServer component is installed. |
 | Python client | The repository's CPython is 3.14.2; `ansys-geometry-core` is not installed. | The current official release supports Python 3.12+, but installation is a later, explicit step. |
 | Licence/API-server availability | Not checked by consuming a licence or launching CAD. | Keep the SpaceClaim ApiServer and licence status open until a controlled validation stage. |
 
@@ -38,11 +39,12 @@ PyPI release is `ansys-geometry-core` 0.17.1 and requires Python 3.12 or
 newer.  Sources: [Ansys compatibility guidance](https://geometry.docs.pyansys.com/version/dev/getting_started/compatibility.html)
 and [the published package metadata](https://pypi.org/project/ansys-geometry-core/0.17.1/).
 
-The resulting next decision is deliberately narrow: evaluate a
-Workbench-linked, visible SpaceClaim session with a PyAnsys Geometry ApiServer
-path.  Do not start a detached SpaceClaim process from the client library as a
-substitute.  Its port, loopback binding, existing-SSH-forward reuse, lifecycle
-and cleanup remain the acceptance criteria of the next stages.
+The resulting next decision is deliberately narrow: evaluate whether the
+installed ApiServer loads into a Workbench-linked, visible SpaceClaim session
+and exposes a usable PyAnsys Geometry endpoint.  Do not start a detached
+SpaceClaim process from the client library as a substitute.  Its port,
+loopback binding, existing-SSH-forward reuse, lifecycle and cleanup remain the
+acceptance criteria of the next stages.
 
 ## Intended topology
 
