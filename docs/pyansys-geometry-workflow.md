@@ -2,7 +2,7 @@
 
 ## Status and decision boundary
 
-This is the proposed, evidence-gated workflow for [issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24).  SpaceClaim is installed on the reference Windows VM, but neither its PyAnsys Geometry API-server path nor a Geometry Service/Core path has been validated in this workspace.  Nothing in this document proves that either path works yet.
+This is the evidence-gated workflow for [issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24).  The Workbench-linked SpaceClaim/PyAnsys Geometry path was validated on 2026-09-09.  The standalone Geometry Service/Core path remains uninstalled and unvalidated.
 
 For a Workbench project, the `.wbpj` Project Schematic is the system of record.
 External CAD belongs in that project's **Geometry** cell: create or attach it
@@ -27,8 +27,8 @@ not a CAD-service connection or licence validation.
 | CAD product | SpaceClaim 2025 R1 (`2025.1.0.0`) is installed under Ansys `v251`. | SpaceClaim is the first candidate backend for the visible Workbench path. |
 | Shared ApiServer | `v251\\Addins\\ApiServer` is installed at build `25.1.0.877`.  Its manifest identifies a Discovery remote API server and its assemblies include Geometry gRPC services plus a v251 provider. | The installed SpaceClaim/Discovery stack has the required API-server component; a running session still has to load it and expose a listener. |
 | Geometry Service/Core | The Ansys installer file map defines `GeometryService` as a component, but no `GeometryService`/`CoreGeometryService` directory, service, registry key, or candidate server executable is present. | Treat the standalone Geometry Service/Core as not installed on this VM; do not plan a local service launch without installing it deliberately. |
-| Existing API session | No SpaceClaim or Discovery process or API listener was observed. | A normal SpaceClaim session cannot yet be treated as a PyAnsys Geometry endpoint, even though its shared ApiServer component is installed. |
-| Python client | The repository's CPython is 3.14.2; `ansys-geometry-core` is not installed. | The current official release supports Python 3.12+, but installation is a later, explicit step. |
+| Existing API session | At the time of the initial inventory, no SpaceClaim or Discovery process or API listener was observed. | A normal SpaceClaim session cannot be treated as a PyAnsys Geometry endpoint merely because its shared ApiServer component is installed. |
+| Python client | The repository's CPython is 3.14.2; `ansys-geometry-core==0.17.2` is installed in its project-local `.venv`. | The CPython client is ready for the validated SpaceClaim endpoint; it does not launch a product itself in this workflow. |
 | Licence/API-server availability | Not checked by consuming a licence or launching CAD. | Keep the SpaceClaim ApiServer and licence status open until a controlled validation stage. |
 
 The official compatibility policy states that PyAnsys Geometry 0.5 and later
@@ -92,6 +92,45 @@ Workbench-linked visible SpaceClaim ApiServer, then to connect PyAnsys Geometry
 to that endpoint.  Native Computer Use could not independently capture the
 Workbench window in this run because access to that app was denied.
 
+## Workbench-linked SpaceClaim ApiServer — validated 2026-09-09
+
+The initially embedded Geometry cell opened `DesignModeler`, as confirmed by
+its Workbench property `CAD Plug-In = DesignModeler`. This is not the target
+backend for PyAnsys Geometry. A separate `Geometry` system (`Geom`) was
+therefore created and used to create the right-hand `Static Structural` system
+(`SYS 1`) with Workbench's official `ComponentsToShare` construction. The
+original embedded `SYS` system remains only as a non-destructive comparison.
+
+Calling `Geom`'s `Geometry.Edit(IsSpaceClaimGeometry=True)` started the correct
+visible `SpaceClaim.exe` as a direct child of the existing Workbench process,
+but it did not expose a PyAnsys Geometry endpoint. A normal SpaceClaim session
+is insufficient: the installed ApiServer manifest has to be present at
+SpaceClaim startup. With user approval, the empty disposable editor was closed
+through its Geometry container and reopened through the *same* `Geom` cell
+using this StartupArguments value:
+
+```text
+/ADDINMANIFESTFILE="C:\Program Files\ANSYS Inc\v251\Addins\ApiServer\Presentation.ApiServerAddIn.Manifest.xml"
+```
+
+The replacement SpaceClaim process remained a direct Workbench child and its
+command line included that manifest. It opened the ApiServer listener
+`::50051`. A temporary `127.0.0.1:50051` forward was added through the
+existing SSH ControlMaster only; `Modeler(..., transport_mode="insecure")`
+then returned `backend_type=SPACECLAIM`, `backend_version=25.1.0`, and
+`healthy=True`. The forward was immediately cancelled after the check; the
+SpaceClaim and Workbench processes remain open.
+
+This records a lifecycle rule for the reusable workflow: opening SpaceClaim
+through Workbench is necessary for Geometry-cell ownership, while injecting
+the installed ApiServer manifest at that same Geometry-cell startup is
+necessary for a PyAnsys connection. Adding the manifest to an already-running
+normal SpaceClaim process is not established; a controlled editor restart is
+required. Never do that restart for a non-disposable editor without explicit
+user approval, because `Geometry.Exit()` saves and updates its editor database.
+
+Sources: [Workbench Geometry container API](https://ansyshelp.ansys.com/public/Views/Secured/corp/v251/en/wb2_js/ContainerName56.html) and [PyAnsys Geometry existing-session guidance](https://geometry.docs.pyansys.com/version/stable/getting_started/existing/index.html).
+
 ## Intended topology
 
 ```text
@@ -101,32 +140,35 @@ Codex skill / reproducible CPython command (Mac)
         v
 visible Workbench in Windows Session 1 -- 127.0.0.1:51000 --> PyWorkbench
         |
-        +-- Workbench Geometry cell -- visible, linked SpaceClaim session
+        +-- `Geom` Geometry cell -- visible, linked SpaceClaim + ApiServer
         |                                  ^
-        |                                  | candidate: PyAnsys Geometry API server
+        |                                  | PyAnsys Geometry via temporary 50051 forward
+        |                                  |
+        +-- `SYS 1` Static Structural consumes the Geometry-cell output
         v                                  |
 Workbench update --> Mechanical Model --> existing Mechanical MCP path
 ```
 
 Reuse the existing Workbench launcher, interactive Windows-session task and
-SSH forwarding.  Do not add a second SSH tunnel, GUI-automation workaround or
-a new MCP server.  A SpaceClaim/Geometry endpoint, if the selected backend
-requires one, is a later lifecycle decision after its ownership, loopback
-binding, cleanup behaviour and compatibility have been demonstrated.
+SSH ControlMaster. Do not create a second SSH process, GUI-automation
+workaround or a new MCP server. A temporary loopback-only ApiServer forward
+may be added to that existing ControlMaster for an active Geometry operation;
+record and cancel it afterwards. Its ownership, loopback binding, cleanup
+behaviour and compatibility have been demonstrated for SpaceClaim 25.1.
 
 ## Evidence-gated work sequence
 
-1. **Inventory the supported backend (read-only).** Record the installed
+1. **Inventory the supported backend (read-only) — completed 2026-09-09.** Record the installed
    SpaceClaim and Ansys versions, relevant licences, API-server availability,
    and the compatible `ansys-geometry-core` release.  Decide whether the
    first proof uses a Workbench-linked SpaceClaim API server or another
    officially supported backend.  Do not install packages or start CAD here.
-2. **Prove Workbench ownership and visibility.** Reuse the existing visible
+2. **Prove Workbench ownership and visibility — completed 2026-09-09.** Reuse the existing visible
    Workbench/gRPC runtime to inspect a disposable `.wbpj` and its systems.
    With explicit mutation approval only, create or open a disposable project
    containing a Geometry cell and a downstream Mechanical system.  Stop
    before starting Mechanical or SpaceClaim API automation.
-3. **Prove the PyAnsys Geometry connection.** Connect to the *same*
+3. **Prove the PyAnsys Geometry connection — completed 2026-09-09.** Connect to the *same*
    Workbench-linked, visible SpaceClaim session and identify the backend and
    API-server lifecycle.  A second, detached SpaceClaim instance is a failed
    result for this path, not an acceptable substitute.
