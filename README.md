@@ -128,6 +128,14 @@ never changes. See
 [Workbench-managed Mechanical access](docs/workbench-integration.md) for the
 second one.
 
+For a Workbench `.wbpj`, Workbench owns external CAD: attach or create it in
+the target system's **Geometry** cell, update the project, and then use
+Mechanical.  Do not directly import external CAD into a Workbench-managed
+Mechanical session.  The proposed PyAnsys Geometry/visible-SpaceClaim path is
+tracked in [PyAnsys Geometry with Workbench-owned CAD](docs/pyansys-geometry-workflow.md).
+Direct Mechanical CAD import remains an explicitly standalone compatibility
+workflow only.
+
 For a Workbench project with exactly one system containing both `Model` and
 `Solution`, the system argument is optional. The runtime discovers and
 validates that system after opening the project. An explicit internal system
@@ -244,7 +252,8 @@ than automatically inheriting this Mac-side server.
 - [Reusable Mac/Parallels setup template](docs/mac-parallels-mechanical-mcp-setup-template.md)
 - [Official server inventory and boundaries](docs/official-pymechanical-mcp.md)
 - [Live validation workflow](docs/live-validation-workflow.md)
-- [Productive cold-start and NX-import test runbook](docs/productive-test-runbook.md)
+- [Standalone Mechanical CAD-import compatibility runbook](docs/productive-test-runbook.md)
+- [Proposed PyAnsys Geometry and Workbench-owned CAD workflow](docs/pyansys-geometry-workflow.md)
 - [Repository roadmap](docs/roadmap.md)
 - [Steady-state thermal application roadmap](docs/steady-state-thermal-workflow.md)
 - [Reusable GitHub project workflow](docs/github-development-workflow.md)

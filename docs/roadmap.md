@@ -56,8 +56,12 @@ against a harmless model. See
 
 Future geometry automation is intentionally a separate research decision in
 [issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24).
-The repository will not codify PyAnsys Geometry as the preferred method until a
-small official, reproducible workflow is validated.
+The proposed workflow keeps external CAD in the Workbench Geometry cell,
+tests visible SpaceClaim/PyAnsys Geometry control, and verifies the downstream
+Mechanical update before it becomes a standard operating path.  See
+[PyAnsys Geometry with Workbench-owned CAD](pyansys-geometry-workflow.md).
+The repository will not codify PyAnsys Geometry as the preferred method until
+that small official, reproducible workflow is validated.
 
 ## Reusable project-method track
 

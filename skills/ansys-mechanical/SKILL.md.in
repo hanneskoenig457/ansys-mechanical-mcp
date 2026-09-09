@@ -1,6 +1,6 @@
 ---
 name: ansys-mechanical
-description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, CAD/NX geometry import into Mechanical, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Also use it to explain what a Mechanical feature, setting, or scripting API object does — contact formulations, element technology, boundary conditions, solver settings, result types — since those answers must be looked up in the official Ansys documentation rather than recalled. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
+description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, external CAD routed through a Workbench Geometry cell, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Also use it to explain what a Mechanical feature, setting, or scripting API object does — contact formulations, element technology, mesh controls, boundary-condition semantics, solver and convergence settings, result definitions, add-on capabilities, or any scripting API object — since those answers must be looked up in the official Ansys documentation rather than recalled. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
 ---
 
 # Ansys Mechanical
@@ -216,6 +216,28 @@ Full architecture, the source-verified `-E` launch mechanism, and all known
 caveats are in
 `@REPO_DIR@/docs/workbench-integration.md`.
 
+## Route external CAD by project ownership
+
+For a Workbench `.wbpj` project, external CAD belongs in the target system's
+**Geometry** cell.  Attach it there or create it in the Workbench-linked
+geometry editor, update Workbench, and only then inspect the downstream
+Mechanical model.  Do not call Mechanical's direct CAD-import scripting API,
+`open_project`, or `upload_file` as a shortcut around the Project Schematic.
+
+The current validated Workbench runtime opens the `.wbpj` and starts a
+Mechanical server for an existing system.  It does not yet automate Geometry
+cell creation, SpaceClaim, or PyAnsys Geometry.  Treat that as an
+evidence-gated workflow under `docs/pyansys-geometry-workflow.md`, not as an
+already-supported capability.  Reuse the existing visible Workbench session,
+loopback-only SSH ControlMaster and port `51000`; do not create a second
+tunnel or attempt GUI automation.
+
+Direct `Model.GeometryImportGroup.AddGeometryImport()` is allowed only when
+the user explicitly targets a standalone `.mechdb` session or explicitly
+requests a labelled compatibility test.  First request the official
+`geometry` guideline, verify the target is not Workbench-managed, and obtain
+the mutation scope before executing it.
+
 ## Windows-only file paths
 
 Mechanical always runs on the remote Windows VM. Any `.mechdb`, CAD, or
@@ -262,8 +284,10 @@ The official MCP itself uses PyMechanical underneath. `run_python_script` is
 therefore an MCP-supported way to reach Mechanical features that do not yet
 have a dedicated high-level MCP tool.
 
-For CAD import, request the `geometry` guideline. `open_project` is for
-`.mechdb`, not `.prt`, STEP, or other CAD files.
+For explicitly authorised standalone CAD import, request the `geometry`
+guideline. `open_project` is for `.mechdb`, not `.prt`, STEP, or other CAD
+files.  For Workbench projects, route the CAD through the Geometry cell
+instead.
 
 ## Preserve state and evidence
 

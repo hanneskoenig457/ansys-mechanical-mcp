@@ -80,6 +80,20 @@ After the script prints `Mechanical (Workbench system '...') ready at
 Mechanical target -- `connect_to_mechanical(ip="127.0.0.1", port=50053,
 transport_mode="insecure")`.
 
+## External CAD belongs to the Geometry cell
+
+For a Workbench project, attach external CAD to the target system's Geometry
+cell or create it in its Workbench-linked geometry editor, then update the
+project before starting Mechanical.  Do not use Mechanical's direct CAD import
+API to bypass the Project Schematic for a `.wbpj` workflow.  The current
+runtime starts a Mechanical server only for a system that already contains
+both `Model` and `Solution`; it does not yet create Geometry cells, control
+SpaceClaim, or automate CAD import.
+
+The proposed evidence-gated PyAnsys Geometry path reuses this visible
+Workbench/gRPC topology but has not yet been validated.  Its boundaries and
+work sequence are in [PyAnsys Geometry with Workbench-owned CAD](pyansys-geometry-workflow.md).
+
 ## How the `-E` launch was found
 
 `ansys.workbench.core.launch_workbench()` (PyWorkbench) builds this exact

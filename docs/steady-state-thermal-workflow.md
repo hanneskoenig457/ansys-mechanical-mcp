@@ -45,7 +45,7 @@ databases, and confidential screenshots outside Git under ignored local roots.
 | Stage | Outcome | Evidence gate |
 | --- | --- | --- |
 | 0 | Inventory official v0.2.0 tools against Mechanical 2025 R1 | Status/model info and lifecycle behavior recorded without mutation |
-| 1 | Review and import one harmless ring CAD file | File identity, units, body count, and project state verified |
+| 1 | Attach or create one harmless ring CAD file in the Workbench Geometry cell, update, and read it back in Mechanical | File identity, units, body count, Geometry-cell state, and project update verified |
 | 2 | Create/read back one Steady-State Thermal analysis | Analysis type and identity verified; no loads or solve |
 | 3 | Assign explicit isotropic conductivity | Material, value, unit, source, and body read back |
 | 4 | Apply fixed temperature to revalidated inner-ring scope | Target, value, unit, and scope read back |
@@ -83,4 +83,6 @@ Each child issue must contain:
 Open a Stage 0 issue to inventory the official tool surface in the current
 Mac/Parallels setup. Do not begin CAD import or model creation until lifecycle,
 file paths, working-directory resource behavior, and harmless model-info calls
-are understood on Mechanical 2025 R1.
+are understood on Mechanical 2025 R1.  In a Workbench project, the following
+CAD stage routes through the Geometry cell rather than a direct Mechanical
+import.
