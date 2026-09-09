@@ -8,7 +8,7 @@
 #
 # Chain: Workbench GUI (gRPC "project server") -> start_mechanical_server()
 # for one named system -> that system's own Mechanical gRPC server -> remapped
-# onto the same local port (50053) that the official ansys-mechanical MCP is
+# onto the same local port (50056) that the official ansys-mechanical MCP is
 # already configured to use, so no MCP reconfiguration is needed.
 #
 # Requires ansys-workbench-core installed in <repository>/.venv
@@ -27,7 +27,7 @@ PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
 PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
 ANSYS_VERSION="${ANSYS_VERSION:-251}"
 WB_GRPC_PORT="${ANSYS_WORKBENCH_GRPC_PORT:-51000}"
-MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
+MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50056}"
 PREWARM_ONLY="${ANSYS_WORKBENCH_PREWARM_ONLY:-0}"
 SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
 WB_WAIT_SECONDS="${ANSYS_WORKBENCH_START_WAIT_SECONDS:-180}"

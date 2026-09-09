@@ -3,7 +3,7 @@
 This runbook moves from a cold-start transport check to a controlled **direct
 Mechanical** NX geometry import. It targets a deliberately standalone,
 otherwise empty `.mechdb` session: Mechanical 2025 R1, official
-PyMechanical-MCP 0.2.0, gRPC port `50053`, and explicit insecure gRPC inside
+PyMechanical-MCP 0.2.0, gRPC port `50056`, and explicit insecure gRPC inside
 the SSH tunnel.
 
 It is **not** the procedure for a Workbench `.wbpj` project.  For those
@@ -41,7 +41,7 @@ overrideable through the named environment variables:
 2. waits **180 seconds** for passwordless SSH
    (`ANSYS_MECHANICAL_SSH_WAIT_SECONDS`);
 3. asks Windows to create/update the Mechanical task and start it;
-4. the Windows script waits **180 seconds** for gRPC port `50053`
+4. the Windows script waits **180 seconds** for gRPC port `50056`
    (`ANSYS_MECHANICAL_START_WAIT_SECONDS`);
 5. the runtime starter waits **30 seconds** for the Mac tunnel endpoint
    (`ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS`).

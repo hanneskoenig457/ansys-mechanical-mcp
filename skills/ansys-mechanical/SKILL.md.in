@@ -73,7 +73,7 @@ parameters are unusable on it, and what to do if Ansys changes it.
 
 ## Pick the right runtime first
 
-Two different runtimes serve the same MCP endpoint `127.0.0.1:50053`. Decide
+Two different runtimes serve the same MCP endpoint `127.0.0.1:50056`. Decide
 which one the task needs **before** starting anything:
 
 | The user's target | Runtime to use |
@@ -93,7 +93,7 @@ the Workbench runtime so Workbench itself manages that folder structure.
    the complete MCP surface at its initial handshake, without opening or
    connecting to Mechanical. Tool visibility is not authorization to mutate a
    model.
-2. First call `connect_to_mechanical` with `127.0.0.1`, port `50053`, and
+2. First call `connect_to_mechanical` with `127.0.0.1`, port `50056`, and
    transport mode `insecure`. If it succeeds, verify with
    `check_mechanical_status` that the reported `project_directory` is the one
    the user actually means — the endpoint may still serve a *different*,
@@ -133,7 +133,7 @@ This is the command behind `Ansys MCP Ready.app`. It may start the stopped VM,
 wait for the configured Windows autologon, repair/verify licensing, start one
 blank visible Workbench, and establish the Workbench tunnel on
 `127.0.0.1:51000`. It must not choose or open a project, start a Mechanical
-system, or claim port `50053`. It is safe to invoke concurrently: callers
+system, or claim port `50056`. It is safe to invoke concurrently: callers
 converge on the same Workbench server.
 
 Do not substitute a project-specific path merely because a previous task used
@@ -156,7 +156,7 @@ Example:
 
 It starts the Workbench GUI with its own gRPC server, opens the project,
 starts a Mechanical server for that one system, and remaps it onto the usual
-`127.0.0.1:50053`. Then call `connect_to_mechanical` exactly as normal — no
+`127.0.0.1:50056`. Then call `connect_to_mechanical` exactly as normal — no
 MCP reconfiguration.
 
 On a cold VM boot this takes several minutes: the script waits for the Windows
@@ -174,7 +174,7 @@ Rules specific to this path:
   schematic display letter. Mechanical's own outline may show
   `B: Steady-State Thermal` while the correct argument is `SYS`. If unknown,
   see `docs/workbench-integration.md` for the one-line query.
-- The script is safe to re-run: if `50053` already answers, it keeps that
+- The script is safe to re-run: if `50056` already answers, it keeps that
   session untouched. Only `ANSYS_WORKBENCH_FORCE_RESTART=1` replaces it, which
   kills the running Mechanical session — ask the user first.
 - **Never call `disconnect_from_mechanical` on a Workbench-managed session.**
@@ -300,8 +300,8 @@ instead.
 - Begin with status, metadata, and other read-only checks.
 - Do not save, solve, clear, upload, open, close, disconnect, run arbitrary
   code, or mutate the model unless the user placed that action in scope.
-- Keep `insecure` Mechanical gRPC limited to `127.0.0.1:50053` and the SSH
-  tunnel. Never expose port `50053` to the LAN.
+- Keep `insecure` Mechanical gRPC limited to `127.0.0.1:50056` and the SSH
+  tunnel. Never expose port `50056` to the LAN.
 - Do not change licensing, server, SSH, firewall, or MCP configuration during
   an engineering task without explicit user authorization.
 - After any interrupted MCP call, server restart, lost connection, modal

@@ -26,7 +26,7 @@
 
 - Reach a Mechanical system inside a `.wbpj` without leaving Workbench, using
   PyWorkbench and `RunWB2.exe -I -E "StartServer(...)"`.
-- Remap the per-system Mechanical port onto the existing `50053` endpoint so
+- Remap the per-system Mechanical port onto the existing `50056` endpoint so
   the MCP registration is unchanged.
 - Carry every forward over one shared SSH ControlMaster connection.
 - See [workbench-integration.md](workbench-integration.md) for the caveats

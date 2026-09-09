@@ -15,10 +15,33 @@ set -eu
 SCRIPT_DIR="${0:A:h}"
 PROJECT_ROOT="${SCRIPT_DIR:h}"
 MCP_BIN="${PROJECT_ROOT}/.venv/bin/ansys-mechanical-mcp"
+typeset -a MCP_ARGS
+MCP_ARGS=("$@")
 
 if [[ ! -x "${MCP_BIN}" ]]; then
   print -u2 -- "Official MCP executable not found: ${MCP_BIN}"
   exit 1
 fi
 
-exec "${MCP_BIN}" --static-tools "$@"
+has_option() {
+  local option="$1"
+  local argument
+  for argument in "${MCP_ARGS[@]}"; do
+    [[ "${argument}" == "${option}" || "${argument}" == "${option}="* ]] && return 0
+  done
+  return 1
+}
+
+# Keep the registered stdio server and both runtime starters on one deliberate
+# loopback endpoint. Callers may still override individual settings explicitly.
+if ! has_option --ip; then
+  MCP_ARGS+=(--ip 127.0.0.1)
+fi
+if ! has_option --port; then
+  MCP_ARGS+=(--port "${ANSYS_MECHANICAL_GRPC_PORT:-50056}")
+fi
+if ! has_option --transport-mode; then
+  MCP_ARGS+=(--transport-mode insecure)
+fi
+
+exec "${MCP_BIN}" --static-tools "${MCP_ARGS[@]}"

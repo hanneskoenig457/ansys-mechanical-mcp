@@ -39,7 +39,7 @@ Verified on 2026-08-13:
 | PyMechanical | `ansys-mechanical-core==0.13.2` |
 | PyWorkbench (Workbench-managed path only) | `ansys-workbench-core==0.14.0` |
 | Codex MCP name | `ansys-mechanical` |
-| Mechanical target seen by the Mac | `127.0.0.1:50053` |
+| Mechanical target seen by the Mac | `127.0.0.1:50056` |
 | Mechanical runtime | Ansys Mechanical 2025 R1 (`251`) in Parallels Windows |
 | gRPC mode | Explicit `insecure`, carried only through loopback and an SSH tunnel |
 
@@ -102,11 +102,11 @@ server; it does not open Parallels or connect to Mechanical:
 
 ```bash
 codex mcp add ansys-mechanical -- \
-  "$PWD/scripts/start-ansys-mechanical-mcp" \
-  --ip 127.0.0.1 \
-  --port 50053 \
-  --transport-mode insecure
+  "$PWD/scripts/start-ansys-mechanical-mcp"
 ```
+
+The wrapper supplies `--ip 127.0.0.1 --port 50056 --transport-mode insecure`
+unless a caller explicitly overrides one of those options.
 
 Confirm the stored registration with:
 
@@ -138,7 +138,7 @@ not reachable, start the runtime that matches the target and then call
 | Standalone `.mechdb` | `scripts/ensure-ansys-mechanical-runtime` |
 | Workbench `.wbpj` system | `scripts/ensure-ansys-workbench-mechanical-runtime '<wbpj>' ['<system>']` |
 
-Both serve the same MCP endpoint `127.0.0.1:50053`, so the MCP registration
+Both serve the same MCP endpoint `127.0.0.1:50056`, so the MCP registration
 never changes. See
 [Workbench-managed Mechanical access](docs/workbench-integration.md) for the
 second one.
@@ -165,7 +165,7 @@ demand, relies on the configured Windows autologon, prepares licensing and a
 blank visible Workbench, and establishes the managed SSH connection plus the
 Workbench tunnel at `127.0.0.1:51000`. It deliberately opens no user project,
 starts no Mechanical system, and therefore does not bind the Mechanical MCP
-endpoint `50053` yet. The AI performs those model-specific steps when an actual
+endpoint `50056` yet. The AI performs those model-specific steps when an actual
 task arrives. Neither Parallels nor the VM is configured to start with macOS.
 Detailed app output is stored in `~/Library/Logs/Ansys MCP Ready.log`.
 Success is non-modal: the app exits by itself after readiness is proven. Only
@@ -204,7 +204,7 @@ does not require editing the scripts.
 | `ANSYS_PARALLELS_VM_BUNDLE` | `/Volumes/WindowsVM/Windows 11.pvm` | `.pvm` opened to show the console |
 | `ANSYS_VERSION` | `251` | Ansys release directory (`v251` = 2025 R1), used for both Windows executables |
 | `ANSYS_MCP_PYTHON` | CPython 3.14 framework build | Interpreter the bootstrap builds `.venv` from |
-| `ANSYS_MECHANICAL_GRPC_PORT` | `50053` | Local and remote Mechanical gRPC port |
+| `ANSYS_MECHANICAL_GRPC_PORT` | `50056` | Local Mechanical gRPC port; standalone Windows Mechanical uses the same port |
 | `ANSYS_WORKBENCH_GRPC_PORT` | `51000` | Workbench project-schematic gRPC port |
 | `ANSYS_WINDOWS_TEMP` | auto-detected via `$env:TEMP` | Windows directory the bootstrap script is copied into |
 | `ANSYS_LICENSE_PORT` | `1055` | FlexNet port probed for licensing readiness |
@@ -249,8 +249,9 @@ in the VM itself. The bootstrap script prints those as remaining manual steps.
   starter recreates them only for a requested Mechanical workflow. The
   project-neutral readiness app can prepare visible blank Workbench and its
   tunnel on demand without starting Mechanical.
-- `127.0.0.1:50053` on the Mac is the local entrance to the SSH tunnel. The
-  tunnel forwards it to `127.0.0.1:50053` inside Windows.
+- `127.0.0.1:50056` on the Mac is the local entrance to the SSH tunnel. For a
+  standalone session it forwards to the same Windows port; Workbench remaps
+  its dynamic per-system port there.
 - The official v0.2.0 server calls `Mechanical.exit()` during MCP shutdown when
   connected. Treat Codex/App restarts as capable of closing the connected
   Mechanical session; never leave unsaved work in that session.
@@ -296,7 +297,7 @@ status must not be inferred from their presence on the board.
 
 Mechanical 2025 R1 without SP04 supports only insecure gRPC. In this setup,
 plaintext gRPC is limited to loopback on both machines and the cross-machine
-hop is an encrypted SSH tunnel. Do not expose port `50053` directly to the LAN,
+hop is an encrypted SSH tunnel. Do not expose port `50056` directly to the LAN,
 use bridged networking for convenience, or treat `insecure` as acceptable for a
 general remote deployment.
 

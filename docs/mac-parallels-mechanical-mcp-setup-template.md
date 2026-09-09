@@ -11,7 +11,7 @@ without copying private usernames, VM addresses, credentials, or keys.
 <WINDOWS_USER>       SSH-capable Windows account
 <WINDOWS_VM_IP>      current Parallels Shared Network address
 <MECHANICAL_EXE>     Windows AnsysWBU.exe path
-<GRPC_PORT>          dedicated Mechanical gRPC port, for example 50053
+<GRPC_PORT>          dedicated Mechanical gRPC port, for example 50056
 <TRANSPORT_MODE>     mode supported by the exact Mechanical/SP version
 ```
 
@@ -113,15 +113,15 @@ interactively and never automate the credential through SSH.
 
 ```bash
 codex mcp add ansys-mechanical -- \
-  <PROJECT_ROOT>/scripts/start-ansys-mechanical-mcp \
-  --ip 127.0.0.1 \
-  --port <GRPC_PORT> \
-  --transport-mode <TRANSPORT_MODE>
+  <PROJECT_ROOT>/scripts/start-ansys-mechanical-mcp
 
 codex mcp get ansys-mechanical
 ```
 
 Restart Codex/ChatGPT Desktop and inspect `/mcp` in a new task.
+
+The repository wrapper defaults to `127.0.0.1:50056` with `insecure` gRPC.
+Use explicit CLI options only for a deliberately different local deployment.
 
 ## 6. Validate in increasing depth
 

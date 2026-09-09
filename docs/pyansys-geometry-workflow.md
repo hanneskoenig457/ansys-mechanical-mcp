@@ -193,11 +193,11 @@ Before starting Mechanical, the narrow downstream operation was `SYS`'s
 **Model**-cell `Update()`. `Setup`, `Solution`, and `Results` were not
 addressed. The documented Workbench path
 `start_mechanical_server(system_name="SYS")` then returned Windows port
-`58263` for a fresh Mechanical 2025 R1 gRPC instance. In this one desktop
-session, local port `50053` was held by an unrelated Codex SSH connection, so
-the existing Ansys ControlMaster temporarily mapped the returned port to
-loopback `127.0.0.1:50056` instead. This did not expose a port to the LAN or
-change the standard `50053` configuration.
+`58263` for a fresh Mechanical 2025 R1 gRPC instance. A prior local default was
+held by an unrelated Codex remote proxy and accepted TCP without serving
+Mechanical gRPC. The Ansys ControlMaster mapped the returned port to loopback
+`127.0.0.1:50056`; that route passed a real gRPC round-trip. `50056` is now the
+configured local Mechanical endpoint for both runtime paths.
 
 Mechanical reported the expected temporary Workbench project directory,
 `is_alive=True`, and no busy operation. A read-only PyMechanical body query

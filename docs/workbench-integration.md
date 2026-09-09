@@ -13,10 +13,15 @@ management of that folder structure.
 Workbench GUI itself (visible, interactive, on the Windows console), opens a
 named `.wbpj`, and starts a PyMechanical gRPC server for one system inside it,
 using the official `ansys-workbench-core` (PyWorkbench) package. The resulting
-Mechanical connection is remapped onto the same local port (`127.0.0.1:50053`)
+Mechanical connection is remapped onto the same local port (`127.0.0.1:50056`)
 that `ansys-mechanical-mcp` is already configured for, so **no MCP
 reconfiguration is needed** to switch between a standalone and a
 Workbench-managed target.
+
+The current local endpoint is `50056`. A previous local default was found to be
+owned by an unrelated Codex remote proxy: it accepted TCP but did not serve
+Mechanical gRPC. This workflow now uses only the verified endpoint. Earlier
+validation wording has been normalized to the current endpoint convention.
 
 ## Runtime topology
 
@@ -41,7 +46,7 @@ Windows: a fresh Mechanical gRPC server for that one system, random port (e.g. 5
         |
         | SSH forward, remapped local port (same ControlMaster socket)
         v
-Mac 127.0.0.1:50053  <-- same endpoint ansys-mechanical-mcp already uses
+Mac 127.0.0.1:50056  <-- same endpoint ansys-mechanical-mcp already uses
 ```
 
 One SSH TCP connection (the `ansys-mechanical-mcp-<uid>/ssh-control` master
@@ -78,9 +83,9 @@ also validates explicit names and reports all eligible candidates when the
 choice is ambiguous.
 
 After the script prints `Mechanical (Workbench system '...') ready at
-127.0.0.1:50053 (transport mode: insecure; gRPC verified)`, use the official
+127.0.0.1:50056 (transport mode: insecure; gRPC verified)`, use the official
 MCP tools exactly as with a standalone Mechanical target --
-`connect_to_mechanical(ip="127.0.0.1", port=50053,
+`connect_to_mechanical(ip="127.0.0.1", port=50056,
 transport_mode="insecure")`. The `gRPC verified` suffix matters: a TCP listener
 alone can appear before the Workbench-owned Mechanical server accepts a real
 PyMechanical request. The runtime therefore waits for an insecure,
@@ -242,14 +247,14 @@ autostart is off; the app or an AI runtime command starts the VM only on demand.
 - Automatic discovery excluded `Geometry` and selected the unique
   Thermal-Electric system `SYS`.
 - `start_mechanical_server()` opened Mechanical on Windows port `54229`; the
-  Mac runtime remapped it to `127.0.0.1:50053` in 60 seconds total.
+  Mac runtime remapped it to `127.0.0.1:50056` in 60 seconds total.
 - A second runtime invocation reused the live Mechanical session in 3 seconds.
 - Sysinternals Autologon produced an active interactive Session 1 after a
   fully stopped VM was started on demand; Parallels VM autostart stayed off.
 - The clean post-race cold test completed from VM state `stopped` in 2:05.
   Read-only inspection found exactly one `RunWB2`, one `AnsysFWW`, zero
   `AnsysWBU`, temporary project `wbnew.wbpj`, zero Workbench systems, no
-  listener on `50053`, and the managed tunnel on `51000`. Two simultaneous
+  listener on `50056`, and the managed tunnel on `51000`. Two simultaneous
   follow-up readiness calls both reused it in 1–2 seconds.
 - The app's success path is non-modal. A Notification Center timeout (`-1712`)
   was initially misreported as a readiness failure after the log had already
@@ -259,7 +264,7 @@ autostart is off; the app or an AI runtime command starts the VM only on demand.
   `ANS_WB` checkout, one-second cache retrieval, no `ansyscl` crash, and a
   Mechanical `ansys` checkout.
 - A Mac PyMechanical check returned `is_alive=True`, version `251`, and the
-  scripting roundtrip `alive` through `127.0.0.1:50053`.
+  scripting roundtrip `alive` through `127.0.0.1:50056`.
 
 ## Known caveats
 
@@ -277,7 +282,7 @@ autostart is off; the app or an AI runtime command starts the VM only on demand.
   controlled recovery on 2026-09-09 changed from `58263` to `58445`. It is not
   valid to infer a full visible-GUI restart merely from that call, a port change,
   or a brief window resize. `ensure-ansys-workbench-mechanical-runtime` guards
-  against the call: only if `127.0.0.1:50053` passes a real scripting call does
+  against the call: only if `127.0.0.1:50056` passes a real scripting call does
   it keep that session and exit without touching it. Pass
   `ANSYS_WORKBENCH_FORCE_RESTART=1` only to deliberately request a replacement.
 - **`disconnect_from_mechanical` has a server-stop effect.** The official MCP
@@ -305,8 +310,8 @@ autostart is off; the app or an AI runtime command starts the VM only on demand.
   quotes survive the remote shell and break `-File`) and without a trailing
   `; exit $LASTEXITCODE` (the remote side is `cmd.exe`, which glues the `;`
   onto the preceding argument).
-- The local-port remap (`50053 -> <dynamic mechanical port>`) is tracked in
-  `${TMPDIR}/ansys-mechanical-mcp-<uid>/last-mech-port-50053` so a re-run can
+- The local-port remap (`50056 -> <dynamic mechanical port>`) is tracked in
+  `${TMPDIR}/ansys-mechanical-mcp-<uid>/last-mech-port-50056` so a re-run can
   cancel the previous, now-stale forward before adding the new one. Deleting
   that file (or the whole control-socket directory) forces a clean forward on
   the next run.

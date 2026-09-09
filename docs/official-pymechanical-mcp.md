@@ -48,7 +48,7 @@ endpoint is unavailable.
 scripts/start-ansys-mechanical-mcp
   → ansys-mechanical-mcp --static-tools
   --ip 127.0.0.1
-  --port 50053
+  --port 50056
   --transport-mode insecure
 ```
 
