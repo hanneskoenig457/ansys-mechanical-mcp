@@ -128,10 +128,14 @@ The interactive Windows user then observed that the Mechanical GUI remained
 open. The Mac application inventory independently still reported
 `Mechanical 2025 R1` as running. Windows Session 0 process inspection did not
 reliably expose the interactive window, so it cannot override that observation.
-The validated conclusion is therefore narrower: ending this MCP process stops
-its Mechanical gRPC service but does **not** prove that the Workbench-managed
-Mechanical GUI has closed. An API client must treat the now-gRPC-less GUI as
-unreachable; do not restart or replace it without explicit authorization.
+The immediate gRPC interruption was not a durable endpoint state: a subsequent
+run of the documented Workbench runtime starter performed its health probe
+successfully on `50056` and deliberately reused the existing Mechanical
+instance. The validated conclusion is therefore narrower: ending this MCP
+process can interrupt its client access, but neither GUI closure nor durable
+loss of the Workbench-managed Mechanical gRPC service was established. Do not
+restart or replace the visible Mechanical instance without explicit
+authorization.
 
 This behavior should be rechecked after every package upgrade. If preserving an
 interactive GUI across MCP restarts becomes important, open an upstream issue
