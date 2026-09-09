@@ -35,9 +35,9 @@ The official compatibility policy states that PyAnsys Geometry 0.5 and later
 has forward/backward compatibility checks and reports unsupported backend
 methods at runtime.  It does not prove that a particular SpaceClaim 25.1
 installation exposes the API server or every desired operation.  The current
-PyPI release is `ansys-geometry-core` 0.17.1 and requires Python 3.12 or
+project-pinned client is `ansys-geometry-core` 0.17.2 and requires Python 3.12 or
 newer.  Sources: [Ansys compatibility guidance](https://geometry.docs.pyansys.com/version/dev/getting_started/compatibility.html)
-and [the published package metadata](https://pypi.org/project/ansys-geometry-core/0.17.1/).
+and [the published package metadata](https://pypi.org/project/ansys-geometry-core/).
 
 The resulting next decision is deliberately narrow: evaluate whether the
 installed ApiServer loads into a Workbench-linked, visible SpaceClaim session
@@ -131,6 +131,47 @@ user approval, because `Geometry.Exit()` saves and updates its editor database.
 
 Sources: [Workbench Geometry container API](https://ansyshelp.ansys.com/public/Views/Secured/corp/v251/en/wb2_js/ContainerName56.html) and [PyAnsys Geometry existing-session guidance](https://geometry.docs.pyansys.com/version/stable/getting_started/existing/index.html).
 
+## Workbench Geometry-cell creation and persistence — validated 2026-09-09
+
+The separate `Geom` Geometry system and the downstream `SYS 1` Static
+Structural system both resolve their Geometry container as `Geometry 1`.
+They therefore share the same Workbench Geometry-cell output; the downstream
+link is not a second direct file import into Mechanical.
+
+For a connected existing SpaceClaim session, PyAnsys Geometry must read the
+Workbench-opened design before editing it:
+
+```python
+modeler = Modeler(host="127.0.0.1", port=50051, transport_mode="insecure")
+design = modeler.read_existing_design()
+# sketch/extrude on design
+modeler.close(close_design=False)
+```
+
+On the reference backend, the resulting active Workbench design was named
+`Design1`. A 40 x 20 x 10 mm `ProofBlock` was created there with one body,
+six faces, twelve edges, eight vertices, and 8,000 mm³ volume. It remained
+visibly present in the Workbench-started SpaceClaim window before persistence.
+
+Two rejected approaches are important guardrails:
+
+- `modeler.create_design(...)` creates a separate active SpaceClaim document.
+  Its body may be visible, but it is not automatically the Workbench Geometry
+  document.
+- Do not call `design.save()` to the already-open Workbench `Geom.scdocx`.
+  SpaceClaim rejects that as a same-name open-document save. Do not call
+  `modeler.close()` with its default either: `close_design=True` closes the
+  active remote design.
+
+The correct persistence owner is Workbench. After closing only the API client
+with `close_design=False`, call the Geometry container's `Exit()` method. It
+closes the visible editor and saves/updates its database. The disposable
+Geometry-cell artifact grew from 38,836 to 66,822 bytes. Reopening the same
+`Geom` cell with the ApiServer manifest and calling `read_existing_design()`
+returned the same `ProofBlock` with the identical topology and volume. This
+passes the Geometry-cell creation, visible-state, persistence, and reopen
+evidence gate. Mechanical was not started for this validation.
+
 ## Intended topology
 
 ```text
@@ -172,9 +213,12 @@ behaviour and compatibility have been demonstrated for SpaceClaim 25.1.
    Workbench-linked, visible SpaceClaim session and identify the backend and
    API-server lifecycle.  A second, detached SpaceClaim instance is a failed
    result for this path, not an acceptable substitute.
-4. **Create one parameterised harmless part.** Build a simple part such as a
-   ring or block with explicit units, inspect bodies/topology, and save it in
-   the Workbench Geometry cell.  Capture visible and programmatic evidence.
+4. **Create and persist one harmless part — completed 2026-09-09.** Build a
+   simple part with explicit units in the already-open Workbench design,
+   inspect bodies/topology, disconnect the API client without closing the
+   design, and let the Geometry cell save it through `Exit()`. Reopen and
+   inspect it before involving Mechanical. Do not create a separate PyAnsys
+   design or directly Save As over the open Workbench document.
 5. **Prove downstream update and parameters.** Update Workbench, read back
    the geometry in Mechanical, then publish one or two CAD dimensions to the
    Workbench Parameter Set and validate one design-point update.  Do not
