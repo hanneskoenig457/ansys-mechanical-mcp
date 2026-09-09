@@ -89,6 +89,10 @@ the Workbench runtime so Workbench itself manages that folder structure.
 
 1. Do not create another virtual environment or install another MCP copy in the
    current task's project. The global MCP is already registered.
+   Its tracked launcher uses the official `--static-tools` mode: Codex receives
+   the complete MCP surface at its initial handshake, without opening or
+   connecting to Mechanical. Tool visibility is not authorization to mutate a
+   model.
 2. First call `connect_to_mechanical` with `127.0.0.1`, port `50053`, and
    transport mode `insecure`. If it succeeds, verify with
    `check_mechanical_status` that the reported `project_directory` is the one

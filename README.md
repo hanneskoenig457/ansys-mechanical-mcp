@@ -114,6 +114,21 @@ Confirm the stored registration with:
 codex mcp get ansys-mechanical
 ```
 
+The tracked launcher passes the official server's `--static-tools` option.
+Codex receives its tool list during the initial MCP handshake, while the
+official server's default dynamic mode reveals Mechanical-dependent tools only
+after a later connection.  Static exposure makes the full official surface
+available to Codex without starting or connecting to Mechanical; it does not
+authorize scripts, saves, or solves. Validate this after package upgrades with:
+
+```bash
+.venv/bin/python scripts/check-mechanical-mcp-tool-surface.py
+```
+
+The changed launch option takes effect only in a new MCP handshake. Do not
+restart the MCP while an unsaved Mechanical session is open: the installed
+v0.2.0 cleanup path can close Mechanical.
+
 For an actual Mechanical task, first try the MCP connection. If the runtime is
 not reachable, start the runtime that matches the target and then call
 `connect_to_mechanical`:

@@ -34,16 +34,19 @@ The upstream package documents 21 tools:
 It also exposes the resource
 `files://mechanical/working_directory`.
 
-Tools requiring Mechanical can be hidden dynamically until a connection
-exists. This setup deliberately starts disconnected so loading a global MCP
-does not start Parallels or Mechanical. A requested Mechanical workflow first
-tries `connect_to_mechanical`; the separate runtime starter is used only when
-the endpoint is unavailable.
+Upstream can hide tools requiring Mechanical dynamically until a connection
+exists. This workspace deliberately starts disconnected so loading the global
+MCP does not start Parallels or Mechanical, but its wrapper uses
+`--static-tools` so Codex receives the complete official surface at its first
+handshake. A requested Mechanical workflow still first tries
+`connect_to_mechanical`; the separate runtime starter is used only when the
+endpoint is unavailable.
 
 ## Installed CLI configuration
 
 ```text
-ansys-mechanical-mcp
+scripts/start-ansys-mechanical-mcp
+  → ansys-mechanical-mcp --static-tools
   --ip 127.0.0.1
   --port 50053
   --transport-mode insecure
@@ -51,6 +54,33 @@ ansys-mechanical-mcp
 
 The MCP transport remains the default stdio transport. `--transport-mode`
 selects Mechanical gRPC security; it does not change MCP stdio.
+
+### Initial tool exposure for Codex — validated 2026-09-09
+
+The official v0.2.0 server defaults to dynamic tool exposure: at initialization
+it disables every tool tagged `requires_mechanical`, then
+`connect_to_mechanical` enables those components server-side. Codex snapshots
+the MCP tool list during its initial handshake and does not add those later
+components to the active tool registry. The result was a reproducible
+six-tool surface (connection/status/guidance only), even though the Mechanical
+connection was alive; `run_python_script`, `solve_analysis`, and model/result
+tools were absent from Codex.
+
+The repository launcher now always supplies the upstream `--static-tools`
+option. An isolated stdio MCP handshake, with no Mechanical connection or
+launch, returned all 21 documented v0.2.0 tools, including
+`run_python_script` and `solve_analysis`. Run the version-pinned regression
+check after installation or upgrade:
+
+```bash
+.venv/bin/python scripts/check-mechanical-mcp-tool-surface.py
+```
+
+This changes availability in Codex only after a new MCP handshake. It merely
+exposes powerful tools; the project safety rules still require explicit scope
+before script execution, saving, or solving. Never restart the MCP to obtain
+the new list while an unsaved Mechanical session is open, because the v0.2.0
+server cleanup calls `Mechanical.exit()`.
 
 ## Consequence levels
 

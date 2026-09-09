@@ -3,6 +3,12 @@
 # Start only the official stdio MCP server. Runtime prerequisites are handled
 # explicitly by ensure-ansys-mechanical-runtime so loading the global MCP does
 # not start Parallels or Mechanical as a side effect.
+#
+# Codex snapshots the tool list during the MCP initialize handshake.  The
+# official server otherwise hides Mechanical-dependent tools until a later
+# connect_to_mechanical call, so Codex never receives run_python_script and
+# solve_analysis in that already-established session.  Expose the official
+# full surface at startup; this does not start or connect to Mechanical.
 
 set -eu
 
@@ -15,4 +21,4 @@ if [[ ! -x "${MCP_BIN}" ]]; then
   exit 1
 fi
 
-exec "${MCP_BIN}" "$@"
+exec "${MCP_BIN}" --static-tools "$@"
