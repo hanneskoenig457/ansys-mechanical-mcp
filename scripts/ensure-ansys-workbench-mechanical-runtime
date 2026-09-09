@@ -270,7 +270,10 @@ systems_result = wb.run_script_string(
     "import json\n"
     "systems=[]\n"
     "for system in GetAllSystems():\n"
-    "    components=[component.Name for component in system.Components]\n"
+    # Workbench appends numeric suffixes to internal component names in shared
+    # systems (for example ``Model 1``), while DisplayText remains the stable
+    # Mechanical-system role used for discovery.
+    "    components=[component.DisplayText for component in system.Components]\n"
     "    systems.append({'name':system.Name,'display_text':system.DisplayText,'components':components})\n"
     "wb_script_result=json.dumps(systems)"
 )

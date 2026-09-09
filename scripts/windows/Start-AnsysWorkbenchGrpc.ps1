@@ -91,13 +91,16 @@ if (-not (Test-Path -LiteralPath $WorkbenchExecutable -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $LicensingUtility -PathType Leaf)) {
     throw "Ansys licensing utility not found: $LicensingUtility"
 }
-if (-not [string]::IsNullOrWhiteSpace($ProjectPath) -and -not (Test-Path -LiteralPath $ProjectPath -PathType Leaf)) {
-    throw "Workbench project not found: $ProjectPath"
-}
-
 if (Test-GrpcListener) {
     Write-Output "Workbench gRPC is already listening on port $GrpcPort."
     return
+}
+
+# A running Workbench server can own an intentionally unsaved disposable
+# project. Reuse that visible session without requiring a `.wbpj` file; the
+# path is needed only when this bootstrap must launch a new Workbench process.
+if (-not [string]::IsNullOrWhiteSpace($ProjectPath) -and -not (Test-Path -LiteralPath $ProjectPath -PathType Leaf)) {
+    throw "Workbench project not found: $ProjectPath"
 }
 
 # On a cold VM boot, SSH answers well before the machine is actually ready to

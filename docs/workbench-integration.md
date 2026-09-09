@@ -59,10 +59,12 @@ scripts/ensure-ansys-workbench-mechanical-runtime \
 ```
 
 The runtime now discovers the system itself. It selects the one system whose
-components contain both `Model` and `Solution`, which excludes geometry-only
-systems. If there is exactly one match, no system argument or preliminary
-query is needed. For a project with multiple Mechanical systems, pass the
-desired **internal** Workbench name as argument 2:
+component **display text** contains both `Model` and `Solution`, which excludes
+geometry-only systems. Workbench appends numeric suffixes to internal component
+names in shared systems (for example, `Model 1`), so those internal names are
+not a reliable capability test. If there is exactly one match, no system
+argument or preliminary query is needed. For a project with multiple Mechanical
+systems, pass the desired **internal** Workbench system name as argument 2:
 
 ```bash
 scripts/ensure-ansys-workbench-mechanical-runtime \
@@ -133,7 +135,9 @@ fresh instance is exactly what the bootstrap already creates.)
 So a project open unsaved in an already-running Workbench GUI does **not** have
 to be saved and closed. The user runs `StartServer(PortToUse=51000)` in
 Workbench's own Command Window (File -> Scripting -> Open Command Window); the
-runtime script then finds the port listening and reuses that session.
+runtime script then finds the port listening and reuses that session without
+requiring the temporary `.wbpj` path to exist on disk. Path validation applies
+only when the bootstrap must launch a new Workbench process.
 `EnvironmentPrefix` is not required -- `workbench_launcher.py` uses it only to
 strip a prefix off the port it parses from Workbench's stdout, and
 `workbench_client.py` never references it.

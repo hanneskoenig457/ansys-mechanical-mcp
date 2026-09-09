@@ -2,7 +2,7 @@
 
 ## Status and decision boundary
 
-This is the evidence-gated workflow for [issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24).  The Workbench-linked SpaceClaim/PyAnsys Geometry path was validated on 2026-09-09.  The standalone Geometry Service/Core path remains uninstalled and unvalidated.
+This is the evidence-gated workflow for [issue #24](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/24). The concrete harmless-part and downstream-handoff evidence is recorded in [issue #29](https://github.com/hanneskoenig457/ansys-mechanical-mcp/issues/29). The Workbench-linked SpaceClaim/PyAnsys Geometry path was validated on 2026-09-09. The standalone Geometry Service/Core path remains uninstalled and unvalidated.
 
 For a Workbench project, the `.wbpj` Project Schematic is the system of record.
 External CAD belongs in that project's **Geometry** cell: create or attach it
@@ -172,6 +172,41 @@ returned the same `ProofBlock` with the identical topology and volume. This
 passes the Geometry-cell creation, visible-state, persistence, and reopen
 evidence gate. Mechanical was not started for this validation.
 
+## Downstream Workbench-to-Mechanical handoff — validated 2026-09-09
+
+The downstream gate was repeated in a fresh, explicitly disposable Workbench
+session. It contained only a `Geom` Geometry component system and one
+downstream `Static Structural` system (`SYS`). Workbench assigned its Geometry
+cell the internal component name `Geometry 1`, but both `Geom` and `SYS`
+resolved that component to the same `Geometry` container. The numerical suffix
+is an internal Workbench name; the shared container is the ownership evidence.
+
+The Workbench-started SpaceClaim editor loaded the ApiServer manifest through
+the `StartupArguments` argument of `Geometry.Edit(...)`. PyAnsys Geometry
+called `read_existing_design()`, created `ProofBlock`, and read back one body,
+six faces, twelve edges, eight vertices, and 8,000 mm³. After
+`modeler.close(close_design=False)`, `Geometry.Exit()` persisted the Geometry
+cell and closed SpaceClaim. The temporary `50051` forward on the existing SSH
+ControlMaster was then removed.
+
+Before starting Mechanical, the narrow downstream operation was `SYS`'s
+**Model**-cell `Update()`. `Setup`, `Solution`, and `Results` were not
+addressed. The documented Workbench path
+`start_mechanical_server(system_name="SYS")` then returned Windows port
+`58263` for a fresh Mechanical 2025 R1 gRPC instance. In this one desktop
+session, local port `50053` was held by an unrelated Codex SSH connection, so
+the existing Ansys ControlMaster temporarily mapped the returned port to
+loopback `127.0.0.1:50056` instead. This did not expose a port to the LAN or
+change the standard `50053` configuration.
+
+Mechanical reported the expected temporary Workbench project directory,
+`is_alive=True`, and no busy operation. A read-only PyMechanical body query
+returned exactly one non-suppressed body named `Geom\\ProofBlock`. This is
+direct downstream evidence that the Workbench-owned Geometry-cell output
+arrived in Mechanical; it is not an engineering-model validation. No direct
+CAD import, mesh generation, parameter publication, project save, solution
+setup, or solve was performed.
+
 ## Intended topology
 
 ```text
@@ -219,10 +254,11 @@ behaviour and compatibility have been demonstrated for SpaceClaim 25.1.
    design, and let the Geometry cell save it through `Exit()`. Reopen and
    inspect it before involving Mechanical. Do not create a separate PyAnsys
    design or directly Save As over the open Workbench document.
-5. **Prove downstream update and parameters.** Update Workbench, read back
-   the geometry in Mechanical, then publish one or two CAD dimensions to the
-   Workbench Parameter Set and validate one design-point update.  Do not
-   solve until a separately authorised engineering stage.
+5. **Prove downstream update — completed 2026-09-09.** Update the downstream
+   Model cell, start Mechanical through Workbench gRPC, and read back the
+   Geometry-cell body without solving. The later, separately authorised stage
+   is to publish one or two CAD dimensions to the Workbench Parameter Set and
+   validate one design-point update.
 6. **Operationalise only validated behaviour.** Add the narrowest reusable
    command, skill routing and troubleshooting documentation.  Treat
    DesignXplorer/DOE as a later optional extension after its licence and the
