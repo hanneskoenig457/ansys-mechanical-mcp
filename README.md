@@ -217,6 +217,8 @@ does not require editing the scripts.
 Timeouts, all in seconds: `ANSYS_MECHANICAL_SSH_WAIT_SECONDS` (180),
 `ANSYS_MECHANICAL_START_WAIT_SECONDS` (180),
 `ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS` (30),
+`ANSYS_MECHANICAL_GRPC_WAIT_SECONDS` (120; Workbench-system gRPC readiness
+after its TCP tunnel opens),
 `ANSYS_WORKBENCH_START_WAIT_SECONDS` (180), and
 `ANSYS_WORKBENCH_READY_WAIT_SECONDS` (300, the budget for the interactive
 sign-in and the licensing daemons; deliberately separate so a slow cold boot

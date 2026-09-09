@@ -207,6 +207,15 @@ arrived in Mechanical; it is not an engineering-model validation. No direct
 CAD import, mesh generation, parameter publication, project save, solution
 setup, or solve was performed.
 
+The server lifecycle boundary was then deliberately exercised on the same
+disposable `SYS` session. A controlled `Mechanical.exit()` stopped the current
+system gRPC endpoint; Workbench's project server remained available. Starting
+the system again only through `start_mechanical_server(system_name="SYS")`
+returned a new Windows endpoint and, after a real read-only gRPC round-trip,
+the body query again returned `Geom\\ProofBlock` as non-suppressed. This is an
+additional Geometry-cell persistence/handoff check, not evidence of a solve,
+project save, or a visible-Mechanical-GUI restart.
+
 ## Intended topology
 
 ```text

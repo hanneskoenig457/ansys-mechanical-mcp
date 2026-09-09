@@ -78,9 +78,15 @@ also validates explicit names and reports all eligible candidates when the
 choice is ambiguous.
 
 After the script prints `Mechanical (Workbench system '...') ready at
-127.0.0.1:50053`, use the official MCP tools exactly as with a standalone
-Mechanical target -- `connect_to_mechanical(ip="127.0.0.1", port=50053,
-transport_mode="insecure")`.
+127.0.0.1:50053 (transport mode: insecure; gRPC verified)`, use the official
+MCP tools exactly as with a standalone Mechanical target --
+`connect_to_mechanical(ip="127.0.0.1", port=50053,
+transport_mode="insecure")`. The `gRPC verified` suffix matters: a TCP listener
+alone can appear before the Workbench-owned Mechanical server accepts a real
+PyMechanical request. The runtime therefore waits for an insecure,
+`cleanup_on_exit=False` connection and a harmless `run_python_script("1")`
+round-trip before reporting ready. Its timeout is
+`ANSYS_MECHANICAL_GRPC_WAIT_SECONDS` (default `120`).
 
 ## External CAD belongs to the Geometry cell
 
@@ -265,21 +271,25 @@ autostart is off; the app or an AI runtime command starts the VM only on demand.
   an insecure client connection (`connect_workbench(..., security="insecure")`,
   `connect_to_mechanical(..., transport_mode="insecure")`), matching the rest
   of this deployment.
-- **`start_mechanical_server()` is not idempotent.** Calling it again for the
-  same system does not return the existing server's port; it replaces the
-  process, and the previous Mechanical process for that system exits.
-  `ensure-ansys-workbench-mechanical-runtime` guards against this: if
-  `127.0.0.1:50053` already answers a real scripting call, it keeps that
-  session and exits without touching it. Pass
-  `ANSYS_WORKBENCH_FORCE_RESTART=1` to deliberately replace it.
-- **`disconnect_from_mechanical` terminates the Mechanical process**, it does
-  not merely close the client connection. Confirmed here: calling it dropped
-  the `AnsysWBU` process and its port off the VM entirely, and recovering
-  required a full `ANSYS_WORKBENCH_FORCE_RESTART=1` re-run. This is the
-  `Mechanical.exit()`-on-shutdown behavior noted in the README, and it costs
-  more in the Workbench case, where the only way back is another
-  non-idempotent `start_mechanical_server()`. Just stop using the connection
-  instead; a stale one is cheap, a destroyed session is not.
+- **`start_mechanical_server()` is not idempotent.** It requests a fresh
+  Workbench-managed Mechanical gRPC server for the system, so treat it as
+  capable of interrupting existing clients. The returned port may change: the
+  controlled recovery on 2026-09-09 changed from `58263` to `58445`. It is not
+  valid to infer a full visible-GUI restart merely from that call, a port change,
+  or a brief window resize. `ensure-ansys-workbench-mechanical-runtime` guards
+  against the call: only if `127.0.0.1:50053` passes a real scripting call does
+  it keep that session and exit without touching it. Pass
+  `ANSYS_WORKBENCH_FORCE_RESTART=1` only to deliberately request a replacement.
+- **`disconnect_from_mechanical` has a server-stop effect.** The official MCP
+  implementation delegates to `Mechanical.exit()`. In the controlled
+  Workbench-SYS test on 2026-09-09, calling that exact underlying method after
+  a successful harmless round-trip removed the remote gRPC listener, the
+  listener-owning `AnsysWBU` PID `7200` exited, and a fresh PyMechanical
+  connection failed. A subsequent Workbench `start_mechanical_server()` call
+  recovered the system on a new port and the existing `Geom\\ProofBlock` body
+  remained present. This proves the gRPC/process boundary; it does not by itself
+  prove what a particular interactive window did. Just stop using a connection
+  when it need not be torn down.
 - **`stop_mechanical_server()` is a no-op below Workbench framework version
   25.2** (`GetFrameworkVersion()` reports `25.1` here) -- its implementation
   only calls the underlying `StopMechanicalServerOnSystem` journal command on

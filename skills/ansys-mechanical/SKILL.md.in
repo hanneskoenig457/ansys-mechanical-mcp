@@ -178,9 +178,11 @@ Rules specific to this path:
   session untouched. Only `ANSYS_WORKBENCH_FORCE_RESTART=1` replaces it, which
   kills the running Mechanical session — ask the user first.
 - **Never call `disconnect_from_mechanical` on a Workbench-managed session.**
-  It terminates the Mechanical process itself, not just the connection
-  (confirmed on this setup). Recovery needs a forced restart, which loses any
-  unsaved work. To stop using a connection, simply stop using it.
+  Its underlying `Mechanical.exit()` call was live-verified to remove the
+  system gRPC listener and its owning `AnsysWBU` process, not merely close the
+  client connection. Recovery needs a forced restart, which can lose unsaved
+  work. To stop using a connection, simply stop using it. Do not infer the
+  visible GUI lifecycle from this server/process evidence alone.
 - There is no clean programmatic stop on this install (`stop_mechanical_server()`
   is a no-op below Workbench framework 25.2; this one reports 25.1). Releasing
   a system's Mechanical server means closing Workbench or Mechanical itself —
