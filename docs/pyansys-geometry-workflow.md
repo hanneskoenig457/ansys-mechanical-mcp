@@ -46,6 +46,25 @@ SpaceClaim process from the client library as a substitute.  Its port,
 loopback binding, existing-SSH-forward reuse, lifecycle and cleanup remain the
 acceptance criteria of the next stages.
 
+## Workbench read-only readiness — observed 2026-09-09
+
+The currently launched Workbench session was reached through the established
+Mac loopback forward at `127.0.0.1:51000`, using PyWorkbench with the already
+documented local `security="insecure"` setting.  A read-only
+`GetProjectFile()` / `GetAllSystems()` check returned the temporary project
+`wbnew.wbpj` and zero systems.  The check created, opened, saved, updated, or
+changed no Workbench project or model.
+
+The Windows listener is bound as `::`:51000 and, for this session, accepts
+both `::1:51000` and `127.0.0.1:51000`.  The existing IPv4 Mac forward works;
+an IPv6 forward on port 51001 was also tested successfully and then removed.
+This is transport evidence only.  It does not show a Geometry cell, a
+SpaceClaim process, an ApiServer endpoint, or a CAD handoff.
+
+Consequently, the read-only precondition of the Workbench-ownership stage is
+passed.  Its next evidence gate remains an explicitly authorised, disposable
+`.wbpj` containing a Geometry cell and downstream Mechanical system.
+
 ## Intended topology
 
 ```text
