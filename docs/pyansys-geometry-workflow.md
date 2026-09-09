@@ -17,6 +17,33 @@ design points, and downstream systems under Workbench ownership.  A fixed
 external CAD import is still useful; it is just attached to the Geometry cell
 rather than injected into Mechanical.
 
+## Backend inventory — 2026-09-09
+
+The following is an observed, read-only inventory for the reference VM.  It is
+not a CAD-service connection or licence validation.
+
+| Question | Observation | Consequence |
+| --- | --- | --- |
+| CAD product | SpaceClaim 2025 R1 (`2025.1.0.0`) is installed under Ansys `v251`. | SpaceClaim is the first candidate backend for the visible Workbench path. |
+| Geometry Service/Core | Neither `GeometryService` nor `CoreGeometryService` is installed under `v251`. | Do not plan a local Geometry Service/Core launch for this VM. |
+| Existing API session | No SpaceClaim or Discovery process, API-server artefact, or listener was observed. | A normal SpaceClaim session cannot yet be treated as a PyAnsys Geometry endpoint. |
+| Python client | The repository's CPython is 3.14.2; `ansys-geometry-core` is not installed. | The current official release supports Python 3.12+, but installation is a later, explicit step. |
+| Licence/API-server availability | Not checked by consuming a licence or launching CAD. | Keep the SpaceClaim ApiServer and licence status open until a controlled validation stage. |
+
+The official compatibility policy states that PyAnsys Geometry 0.5 and later
+has forward/backward compatibility checks and reports unsupported backend
+methods at runtime.  It does not prove that a particular SpaceClaim 25.1
+installation exposes the API server or every desired operation.  The current
+PyPI release is `ansys-geometry-core` 0.17.1 and requires Python 3.12 or
+newer.  Sources: [Ansys compatibility guidance](https://geometry.docs.pyansys.com/version/dev/getting_started/compatibility.html)
+and [the published package metadata](https://pypi.org/project/ansys-geometry-core/0.17.1/).
+
+The resulting next decision is deliberately narrow: evaluate a
+Workbench-linked, visible SpaceClaim session with a PyAnsys Geometry ApiServer
+path.  Do not start a detached SpaceClaim process from the client library as a
+substitute.  Its port, loopback binding, existing-SSH-forward reuse, lifecycle
+and cleanup remain the acceptance criteria of the next stages.
+
 ## Intended topology
 
 ```text
