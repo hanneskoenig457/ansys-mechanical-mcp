@@ -113,6 +113,18 @@ The installed source connects with `cleanup_on_exit=False`, but
 MCP process shuts down. Treat a Desktop restart, MCP reload, or task host
 shutdown as capable of closing the Mechanical GUI.
 
+### Live Workbench-managed verification — 2026-09-09
+
+This lifecycle behavior was retested against the live Workbench-managed
+Mechanical session rather than inferred solely from the installed source. The
+active official MCP process held the only client connection to the temporary
+loopback forward at `127.0.0.1:50056`. It was stopped with `SIGINT`; no model
+script, save, mesh, or solve was requested. Afterwards, a new direct
+PyMechanical connection to `50056` failed, while Windows still reported the
+Workbench process (`AnsysWBU`) and the Workbench gRPC listener at `51000`
+remained reachable. Thus, for this v0.2.0/Mechanical 2025 R1 setup, ending the
+connected MCP process closes Mechanical but does not close Workbench.
+
 This behavior should be rechecked after every package upgrade. If preserving an
 interactive GUI across MCP restarts becomes important, open an upstream issue
 or validate an official detach mechanism rather than patching site-packages.
