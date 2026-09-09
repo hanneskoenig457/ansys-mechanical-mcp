@@ -19,17 +19,17 @@ Codex / ChatGPT Desktop on macOS
         v
 official ansys-mechanical-mcp in <repository>/.venv
         |
-        | PyMechanical: try 127.0.0.1:50053
+        | PyMechanical: try 127.0.0.1:50056
         v
 global skill runs explicit runtime starter only if unavailable
         |
         | starts/verifies VM, Windows task, and SSH tunnel
         v
-Mac SSH tunnel entrance at 127.0.0.1:50053
+Mac SSH tunnel entrance at 127.0.0.1:50056
         |
         | encrypted SSH through Parallels Shared Network
         v
-Windows 127.0.0.1:50053
+Windows 127.0.0.1:50056 (standalone only; Workbench system ports are dynamic)
         |
         v
 Ansys Mechanical 2025 R1 gRPC service

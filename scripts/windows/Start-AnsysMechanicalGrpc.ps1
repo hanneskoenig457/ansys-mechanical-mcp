@@ -3,7 +3,7 @@ param(
         if ($env:ANSYS_MECHANICAL_GRPC_PORT) {
             [int]$env:ANSYS_MECHANICAL_GRPC_PORT
         } else {
-            50053
+            50056
         }
     ),
     [int]$StartupWaitSeconds = $(

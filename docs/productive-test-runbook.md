@@ -1,9 +1,15 @@
-# Productive Mechanical-MCP test runbook
+# Standalone Mechanical CAD-import compatibility runbook
 
-This runbook moves from a cold-start transport check to a controlled NX
-geometry import. It targets the verified local setup: Mechanical 2025 R1,
-official PyMechanical-MCP 0.2.0, gRPC port `50053`, and explicit insecure gRPC
-inside the SSH tunnel.
+This runbook moves from a cold-start transport check to a controlled **direct
+Mechanical** NX geometry import. It targets a deliberately standalone,
+otherwise empty `.mechdb` session: Mechanical 2025 R1, official
+PyMechanical-MCP 0.2.0, gRPC port `50056`, and explicit insecure gRPC inside
+the SSH tunnel.
+
+It is **not** the procedure for a Workbench `.wbpj` project.  For those
+projects, external CAD must be attached or created in the Workbench Geometry
+cell and then propagated by a Workbench update.  See
+[PyAnsys Geometry with Workbench-owned CAD](pyansys-geometry-workflow.md).
 
 ## What the installed MCP can actually do
 
@@ -20,10 +26,10 @@ The installed server exposes 21 tools. Relevant to this test:
 
 The built-in `geometry` guidance explicitly lists NX `.prt` and uses
 `Model.GeometryImportGroup.AddGeometryImport()` followed by `Import(...)`.
-Therefore NX import is a supported scripted workflow, although the actual CAD
-translation can still fail for file-version, installation, or licensing
-reasons. Such a failure is a real integration result, not an unknown MCP
-capability.
+Therefore NX import is a supported **standalone** scripted compatibility
+workflow, although the actual CAD translation can still fail for file-version,
+installation, or licensing reasons. Such a failure is a real integration
+result, not an unknown MCP capability.
 
 ## Automation timing and login behavior
 
@@ -35,7 +41,7 @@ overrideable through the named environment variables:
 2. waits **180 seconds** for passwordless SSH
    (`ANSYS_MECHANICAL_SSH_WAIT_SECONDS`);
 3. asks Windows to create/update the Mechanical task and start it;
-4. the Windows script waits **180 seconds** for gRPC port `50053`
+4. the Windows script waits **180 seconds** for gRPC port `50056`
    (`ANSYS_MECHANICAL_START_WAIT_SECONDS`);
 5. the runtime starter waits **30 seconds** for the Mac tunnel endpoint
    (`ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS`).
@@ -79,7 +85,7 @@ ChatGPT/Codex app and an unrelated new local chat remains intentionally open.
 If Windows stops at the login screen, log in and repeat the same status
 request so the runtime starter can trigger Mechanical in that desktop.
 
-## Test 2: prove the NX file and import API without mutation
+## Test 2: prove the standalone NX file and import API without mutation
 
 Send:
 
@@ -101,12 +107,13 @@ Pass criteria:
   automatic format detection;
 - no geometry appears yet.
 
-## Test 3: controlled NX import
+## Test 3: controlled standalone NX import
 
 Only after Test 2 passes, send:
 
 ```text
-Import exactly this NX geometry into the currently empty Mechanical model:
+In an explicitly authorised standalone, currently empty Mechanical model,
+import exactly this NX geometry:
 \\Mac\SPP2305_Hannes\00_TEG_Energy_Harvesting\98_Ansys\00_CAD_NX\easy_2_body_contact.prt
 
 Use the installed MCP's geometry guideline and Mechanical scripting
@@ -117,9 +124,9 @@ mesh, create an analysis, define contacts or boundary conditions, solve, or
 save the project.
 ```
 
-This test intentionally mutates only the unsaved, empty Mechanical session by
-adding geometry. A CAD translator/license/file-version failure is reported
-verbatim and must not be hidden or replaced with invented geometry.
+This test intentionally mutates only the unsaved, empty standalone Mechanical
+session by adding geometry. A CAD translator/license/file-version failure is
+reported verbatim and must not be hidden or replaced with invented geometry.
 
 ## Test 4: stop before engineering decisions
 

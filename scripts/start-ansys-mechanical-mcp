@@ -3,16 +3,45 @@
 # Start only the official stdio MCP server. Runtime prerequisites are handled
 # explicitly by ensure-ansys-mechanical-runtime so loading the global MCP does
 # not start Parallels or Mechanical as a side effect.
+#
+# Codex snapshots the tool list during the MCP initialize handshake.  The
+# official server otherwise hides Mechanical-dependent tools until a later
+# connect_to_mechanical call, so Codex never receives run_python_script and
+# solve_analysis in that already-established session.  Expose the official
+# full surface at startup; this does not start or connect to Mechanical.
 
 set -eu
 
 SCRIPT_DIR="${0:A:h}"
 PROJECT_ROOT="${SCRIPT_DIR:h}"
 MCP_BIN="${PROJECT_ROOT}/.venv/bin/ansys-mechanical-mcp"
+typeset -a MCP_ARGS
+MCP_ARGS=("$@")
 
 if [[ ! -x "${MCP_BIN}" ]]; then
   print -u2 -- "Official MCP executable not found: ${MCP_BIN}"
   exit 1
 fi
 
-exec "${MCP_BIN}" "$@"
+has_option() {
+  local option="$1"
+  local argument
+  for argument in "${MCP_ARGS[@]}"; do
+    [[ "${argument}" == "${option}" || "${argument}" == "${option}="* ]] && return 0
+  done
+  return 1
+}
+
+# Keep the registered stdio server and both runtime starters on one deliberate
+# loopback endpoint. Callers may still override individual settings explicitly.
+if ! has_option --ip; then
+  MCP_ARGS+=(--ip 127.0.0.1)
+fi
+if ! has_option --port; then
+  MCP_ARGS+=(--port "${ANSYS_MECHANICAL_GRPC_PORT:-50056}")
+fi
+if ! has_option --transport-mode; then
+  MCP_ARGS+=(--transport-mode insecure)
+fi
+
+exec "${MCP_BIN}" --static-tools "${MCP_ARGS[@]}"

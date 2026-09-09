@@ -20,7 +20,7 @@ Each gate proves something different:
 
 1. Use a harmless project with no unsaved productive work.
 2. Keep Parallels in Shared Network mode.
-3. Start Mechanical 2025 R1 with gRPC port `50053`.
+3. Start Mechanical 2025 R1 with gRPC port `50056`.
 4. Confirm the Windows listener and firewall posture.
 5. Start the SSH tunnel with an explicit Mac loopback bind.
 6. Confirm the pinned local package versions and Codex registration.
@@ -40,7 +40,7 @@ codex mcp get ansys-mechanical
 ### 2. Tunnel
 
 ```bash
-nc -vz 127.0.0.1 50053
+nc -vz 127.0.0.1 50056
 ```
 
 Failure here is networking/process state. Do not debug it by changing MCP

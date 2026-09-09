@@ -3,3 +3,4 @@
 ansys-mechanical-core[mcp]==0.13.2
 ansys-mechanical-mcp==0.2.0
 ansys-workbench-core==0.14.0
+ansys-geometry-core==0.17.2

@@ -1,6 +1,6 @@
 ---
 name: ansys-mechanical
-description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, CAD/NX geometry import into Mechanical, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Also use it to explain what a Mechanical feature, setting, or scripting API object does — contact formulations, element technology, boundary conditions, solver settings, result types — since those answers must be looked up in the official Ansys documentation rather than recalled. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
+description: Operate Ansys Mechanical through the globally configured official PyMechanical-MCP server and the Mac-to-Parallels runtime. Use for Ansys Mechanical, PyMechanical, PyWorkbench, Mechanical gRPC, .mechdb projects, Workbench .wbpj projects and their Project Schematic systems, external CAD routed through a Workbench Geometry cell, model inspection, meshing, analyses, solving, results, screenshots, or troubleshooting this Mechanical connection. Also use it to explain what a Mechanical feature, setting, or scripting API object does — contact formulations, element technology, mesh controls, boundary-condition semantics, solver and convergence settings, result definitions, add-on capabilities, or any scripting API object — since those answers must be looked up in the official Ansys documentation rather than recalled. Do not use for Fluent, AEDT, Lumerical, or unrelated Ansys products.
 ---
 
 # Ansys Mechanical
@@ -73,7 +73,7 @@ parameters are unusable on it, and what to do if Ansys changes it.
 
 ## Pick the right runtime first
 
-Two different runtimes serve the same MCP endpoint `127.0.0.1:50053`. Decide
+Two different runtimes serve the same MCP endpoint `127.0.0.1:50056`. Decide
 which one the task needs **before** starting anything:
 
 | The user's target | Runtime to use |
@@ -89,7 +89,11 @@ the Workbench runtime so Workbench itself manages that folder structure.
 
 1. Do not create another virtual environment or install another MCP copy in the
    current task's project. The global MCP is already registered.
-2. First call `connect_to_mechanical` with `127.0.0.1`, port `50053`, and
+   Its tracked launcher uses the official `--static-tools` mode: Codex receives
+   the complete MCP surface at its initial handshake, without opening or
+   connecting to Mechanical. Tool visibility is not authorization to mutate a
+   model.
+2. First call `connect_to_mechanical` with `127.0.0.1`, port `50056`, and
    transport mode `insecure`. If it succeeds, verify with
    `check_mechanical_status` that the reported `project_directory` is the one
    the user actually means — the endpoint may still serve a *different*,
@@ -129,7 +133,7 @@ This is the command behind `Ansys MCP Ready.app`. It may start the stopped VM,
 wait for the configured Windows autologon, repair/verify licensing, start one
 blank visible Workbench, and establish the Workbench tunnel on
 `127.0.0.1:51000`. It must not choose or open a project, start a Mechanical
-system, or claim port `50053`. It is safe to invoke concurrently: callers
+system, or claim port `50056`. It is safe to invoke concurrently: callers
 converge on the same Workbench server.
 
 Do not substitute a project-specific path merely because a previous task used
@@ -152,7 +156,7 @@ Example:
 
 It starts the Workbench GUI with its own gRPC server, opens the project,
 starts a Mechanical server for that one system, and remaps it onto the usual
-`127.0.0.1:50053`. Then call `connect_to_mechanical` exactly as normal — no
+`127.0.0.1:50056`. Then call `connect_to_mechanical` exactly as normal — no
 MCP reconfiguration.
 
 On a cold VM boot this takes several minutes: the script waits for the Windows
@@ -170,13 +174,15 @@ Rules specific to this path:
   schematic display letter. Mechanical's own outline may show
   `B: Steady-State Thermal` while the correct argument is `SYS`. If unknown,
   see `docs/workbench-integration.md` for the one-line query.
-- The script is safe to re-run: if `50053` already answers, it keeps that
+- The script is safe to re-run: if `50056` already answers, it keeps that
   session untouched. Only `ANSYS_WORKBENCH_FORCE_RESTART=1` replaces it, which
   kills the running Mechanical session — ask the user first.
 - **Never call `disconnect_from_mechanical` on a Workbench-managed session.**
-  It terminates the Mechanical process itself, not just the connection
-  (confirmed on this setup). Recovery needs a forced restart, which loses any
-  unsaved work. To stop using a connection, simply stop using it.
+  Its underlying `Mechanical.exit()` call was live-verified to remove the
+  system gRPC listener and its owning `AnsysWBU` process, not merely close the
+  client connection. Recovery needs a forced restart, which can lose unsaved
+  work. To stop using a connection, simply stop using it. Do not infer the
+  visible GUI lifecycle from this server/process evidence alone.
 - There is no clean programmatic stop on this install (`stop_mechanical_server()`
   is a no-op below Workbench framework 25.2; this one reports 25.1). Releasing
   a system's Mechanical server means closing Workbench or Mechanical itself —
@@ -215,6 +221,28 @@ Rules specific to this path:
 Full architecture, the source-verified `-E` launch mechanism, and all known
 caveats are in
 `@REPO_DIR@/docs/workbench-integration.md`.
+
+## Route external CAD by project ownership
+
+For a Workbench `.wbpj` project, external CAD belongs in the target system's
+**Geometry** cell.  Attach it there or create it in the Workbench-linked
+geometry editor, update Workbench, and only then inspect the downstream
+Mechanical model.  Do not call Mechanical's direct CAD-import scripting API,
+`open_project`, or `upload_file` as a shortcut around the Project Schematic.
+
+The current validated Workbench runtime opens the `.wbpj` and starts a
+Mechanical server for an existing system.  It does not yet automate Geometry
+cell creation, SpaceClaim, or PyAnsys Geometry.  Treat that as an
+evidence-gated workflow under `docs/pyansys-geometry-workflow.md`, not as an
+already-supported capability.  Reuse the existing visible Workbench session,
+loopback-only SSH ControlMaster and port `51000`; do not create a second
+tunnel or attempt GUI automation.
+
+Direct `Model.GeometryImportGroup.AddGeometryImport()` is allowed only when
+the user explicitly targets a standalone `.mechdb` session or explicitly
+requests a labelled compatibility test.  First request the official
+`geometry` guideline, verify the target is not Workbench-managed, and obtain
+the mutation scope before executing it.
 
 ## Windows-only file paths
 
@@ -262,16 +290,18 @@ The official MCP itself uses PyMechanical underneath. `run_python_script` is
 therefore an MCP-supported way to reach Mechanical features that do not yet
 have a dedicated high-level MCP tool.
 
-For CAD import, request the `geometry` guideline. `open_project` is for
-`.mechdb`, not `.prt`, STEP, or other CAD files.
+For explicitly authorised standalone CAD import, request the `geometry`
+guideline. `open_project` is for `.mechdb`, not `.prt`, STEP, or other CAD
+files.  For Workbench projects, route the CAD through the Geometry cell
+instead.
 
 ## Preserve state and evidence
 
 - Begin with status, metadata, and other read-only checks.
 - Do not save, solve, clear, upload, open, close, disconnect, run arbitrary
   code, or mutate the model unless the user placed that action in scope.
-- Keep `insecure` Mechanical gRPC limited to `127.0.0.1:50053` and the SSH
-  tunnel. Never expose port `50053` to the LAN.
+- Keep `insecure` Mechanical gRPC limited to `127.0.0.1:50056` and the SSH
+  tunnel. Never expose port `50056` to the LAN.
 - Do not change licensing, server, SSH, firewall, or MCP configuration during
   an engineering task without explicit user authorization.
 - After any interrupted MCP call, server restart, lost connection, modal

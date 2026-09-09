@@ -8,7 +8,7 @@
 #
 # Chain: Workbench GUI (gRPC "project server") -> start_mechanical_server()
 # for one named system -> that system's own Mechanical gRPC server -> remapped
-# onto the same local port (50053) that the official ansys-mechanical MCP is
+# onto the same local port (50056) that the official ansys-mechanical MCP is
 # already configured to use, so no MCP reconfiguration is needed.
 #
 # Requires ansys-workbench-core installed in <repository>/.venv
@@ -27,7 +27,7 @@ PARALLELS_VM="${ANSYS_PARALLELS_VM:-Windows 11}"
 PARALLELS_VM_BUNDLE="${ANSYS_PARALLELS_VM_BUNDLE:-/Volumes/WindowsVM/Windows 11.pvm}"
 ANSYS_VERSION="${ANSYS_VERSION:-251}"
 WB_GRPC_PORT="${ANSYS_WORKBENCH_GRPC_PORT:-51000}"
-MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50053}"
+MECH_LOCAL_PORT="${ANSYS_MECHANICAL_GRPC_PORT:-50056}"
 PREWARM_ONLY="${ANSYS_WORKBENCH_PREWARM_ONLY:-0}"
 SSH_WAIT_SECONDS="${ANSYS_MECHANICAL_SSH_WAIT_SECONDS:-180}"
 WB_WAIT_SECONDS="${ANSYS_WORKBENCH_START_WAIT_SECONDS:-180}"
@@ -35,6 +35,10 @@ LICENSE_PORT="${ANSYS_LICENSE_PORT:-1055}"
 LICENSING_CLIENT_PORT="${ANSYS_LICENSING_CLIENT_PORT:-1084}"
 LICENSING_STABILITY_SECONDS="${ANSYS_LICENSING_STABILITY_SECONDS:-20}"
 TUNNEL_WAIT_SECONDS="${ANSYS_MECHANICAL_TUNNEL_WAIT_SECONDS:-30}"
+# A TCP listener can be present before Workbench's system-owned Mechanical
+# server accepts real gRPC calls.  Do not report the runtime ready until a
+# non-mutating PyMechanical round-trip has succeeded.
+MECH_GRPC_WAIT_SECONDS="${ANSYS_MECHANICAL_GRPC_WAIT_SECONDS:-120}"
 CONTROL_DIR="${TMPDIR:-/tmp}/ansys-mechanical-mcp-${UID}"
 CONTROL_SOCKET="${CONTROL_DIR}/ssh-control"
 
@@ -65,6 +69,33 @@ fail() { log "ERROR: $*"; exit 1; }
 mark() {
   PHASE_NAMES+=("$1")
   PHASE_TIMES+=("$(( SECONDS - T0 ))")
+}
+
+# This deliberately creates only a short-lived client.  ``cleanup_on_exit``
+# must remain false: this is a Workbench-owned Mechanical process and this
+# probe must never turn a client disconnect into a product shutdown.
+# ``keep_connection_alive`` is false because the process exits immediately
+# after the probe, so a heartbeat thread is neither necessary nor useful.
+mechanical_grpc_healthcheck() {
+  "${VENV_PYTHON}" - "${MECH_LOCAL_PORT}" <<'PYEOF'
+import sys
+import warnings
+
+warnings.filterwarnings("ignore")
+from ansys.mechanical.core import connect_to_mechanical
+
+mechanical = connect_to_mechanical(
+    ip="127.0.0.1",
+    port=int(sys.argv[1]),
+    transport_mode="insecure",
+    connect_timeout=5,
+    cleanup_on_exit=False,
+    keep_connection_alive=False,
+)
+# A connection object alone is insufficient: this RPC verifies that the
+# Workbench-owned Mechanical session can actually execute gRPC requests.
+mechanical.run_python_script("1")
+PYEOF
 }
 
 # Prefix each line a remote command emits with the elapsed time it arrived at.
@@ -211,21 +242,7 @@ fi
 # here and keep it, unless the caller explicitly asked for a fresh one.
 if [[ "${ANSYS_WORKBENCH_FORCE_RESTART:-0}" != "1" ]] \
   && nc -z 127.0.0.1 "${MECH_LOCAL_PORT}" >/dev/null 2>&1; then
-  if "${VENV_PYTHON}" - "${MECH_LOCAL_PORT}" <<'PYEOF' >/dev/null 2>&1
-import sys, warnings
-warnings.filterwarnings("ignore")
-from ansys.mechanical.core import connect_to_mechanical
-
-mech = connect_to_mechanical(
-    ip="127.0.0.1",
-    port=int(sys.argv[1]),
-    transport_mode="insecure",
-    connect_timeout=8,
-)
-# Touch the session so a merely-open socket does not count as alive.
-mech.run_python_script("1")
-PYEOF
-  then
+  if mechanical_grpc_healthcheck >/dev/null 2>&1; then
     mark "existing mechanical reused"
     if [[ -n "${SYSTEM_NAME}" ]]; then
       REUSED_SYSTEM_DESCRIPTION="system '${SYSTEM_NAME}'"
@@ -270,7 +287,10 @@ systems_result = wb.run_script_string(
     "import json\n"
     "systems=[]\n"
     "for system in GetAllSystems():\n"
-    "    components=[component.Name for component in system.Components]\n"
+    # Workbench appends numeric suffixes to internal component names in shared
+    # systems (for example ``Model 1``), while DisplayText remains the stable
+    # Mechanical-system role used for discovery.
+    "    components=[component.DisplayText for component in system.Components]\n"
     "    systems.append({'name':system.Name,'display_text':system.DisplayText,'components':components})\n"
     "wb_script_result=json.dumps(systems)"
 )
@@ -357,4 +377,18 @@ done
 (( TUNNEL_READY == 1 )) || fail "Mechanical tunnel did not become reachable on 127.0.0.1:${MECH_LOCAL_PORT} within ${TUNNEL_WAIT_SECONDS}s"
 mark "mechanical port reachable"
 
-print -- "Mechanical (Workbench system '${SYSTEM_NAME}') ready at 127.0.0.1:${MECH_LOCAL_PORT} (transport mode: insecure)"
+log "Waiting up to ${MECH_GRPC_WAIT_SECONDS}s for the Workbench-owned Mechanical gRPC service"
+MECH_GRPC_READY=0
+MECH_GRPC_DEADLINE=$(( SECONDS + MECH_GRPC_WAIT_SECONDS ))
+while (( SECONDS < MECH_GRPC_DEADLINE )); do
+  if mechanical_grpc_healthcheck >/dev/null 2>&1; then
+    MECH_GRPC_READY=1
+    break
+  fi
+  sleep 2
+done
+(( MECH_GRPC_READY == 1 )) \
+  || fail "Mechanical tunnel is open, but the Workbench-owned gRPC service did not answer a harmless PyMechanical request within ${MECH_GRPC_WAIT_SECONDS}s"
+mark "mechanical grpc verified"
+
+print -- "Mechanical (Workbench system '${SYSTEM_NAME}') ready at 127.0.0.1:${MECH_LOCAL_PORT} (transport mode: insecure; gRPC verified)"
