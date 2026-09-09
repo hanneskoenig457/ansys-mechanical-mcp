@@ -111,7 +111,8 @@ automatically safe tools. Inspect code and target state before execution.
 The installed source connects with `cleanup_on_exit=False`, but
 `PyMechanicalMCP.product_cleanup()` calls `context.mechanical.exit()` when the
 MCP process shuts down. Treat a Desktop restart, MCP reload, or task host
-shutdown as capable of closing the Mechanical GUI.
+shutdown as capable of ending the Mechanical gRPC service; do not infer the
+interactive GUI outcome from that fact alone.
 
 ### Live Workbench-managed verification — 2026-09-09
 
@@ -120,10 +121,17 @@ Mechanical session rather than inferred solely from the installed source. The
 active official MCP process held the only client connection to the temporary
 loopback forward at `127.0.0.1:50056`. It was stopped with `SIGINT`; no model
 script, save, mesh, or solve was requested. Afterwards, a new direct
-PyMechanical connection to `50056` failed, while Windows still reported the
-Workbench process (`AnsysWBU`) and the Workbench gRPC listener at `51000`
-remained reachable. Thus, for this v0.2.0/Mechanical 2025 R1 setup, ending the
-connected MCP process closes Mechanical but does not close Workbench.
+PyMechanical connection to `50056` failed, while Workbench (`AnsysWBU`) and
+its gRPC listener at `51000` remained reachable.
+
+The interactive Windows user then observed that the Mechanical GUI remained
+open. The Mac application inventory independently still reported
+`Mechanical 2025 R1` as running. Windows Session 0 process inspection did not
+reliably expose the interactive window, so it cannot override that observation.
+The validated conclusion is therefore narrower: ending this MCP process stops
+its Mechanical gRPC service but does **not** prove that the Workbench-managed
+Mechanical GUI has closed. An API client must treat the now-gRPC-less GUI as
+unreachable; do not restart or replace it without explicit authorization.
 
 This behavior should be rechecked after every package upgrade. If preserving an
 interactive GUI across MCP restarts becomes important, open an upstream issue
