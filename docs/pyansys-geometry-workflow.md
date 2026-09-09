@@ -61,9 +61,36 @@ an IPv6 forward on port 51001 was also tested successfully and then removed.
 This is transport evidence only.  It does not show a Geometry cell, a
 SpaceClaim process, an ApiServer endpoint, or a CAD handoff.
 
-Consequently, the read-only precondition of the Workbench-ownership stage is
-passed.  Its next evidence gate remains an explicitly authorised, disposable
-`.wbpj` containing a Geometry cell and downstream Mechanical system.
+Consequently, the read-only precondition of the Workbench-ownership stage was
+passed.  Its next evidence gate was an explicitly authorised, disposable
+`.wbpj` containing a Geometry cell and downstream Mechanical system; the
+result is recorded below.
+
+## Workbench-owned system — observed 2026-09-09
+
+With explicit user approval, one in-memory `Static Structural (ANSYS)` system
+was created in the already empty temporary Workbench project.  It has internal
+name `SYS`, display text `Static Structural`, and the following read-back
+components: `Engineering Data`, `Geometry`, `Model`, `Setup`, `Solution`, and
+`Results`.  A second, independent `GetAllSystems()` read returned exactly that
+one system and component set.
+
+No CAD was attached or created, no Geometry editor or SpaceClaim ApiServer was
+started, no Mechanical gRPC server was started, and the temporary project was
+not saved.  The exact per-user temporary path is recorded only in the ignored
+private handoff, not in tracked documentation or the public issue.  The
+visible Workbench Session-1 instance and its established PyWorkbench forward
+were reused; no existing project or Mechanical session was replaced.
+
+This passes the Workbench-ownership gate for a disposable system.  The
+reusable readiness entry point is `scripts/prepare-ansys-mcp-ready`; the
+programmatic Schematic client is `ansys.workbench.core.connect_workbench` via
+the existing port 51000 forward.  There is deliberately no reusable
+Geometry-cell creation command yet.  The remaining gap for the next stage is
+to demonstrate that this *same* Geometry cell launches or attaches the
+Workbench-linked visible SpaceClaim ApiServer, then to connect PyAnsys Geometry
+to that endpoint.  Native Computer Use could not independently capture the
+Workbench window in this run because access to that app was denied.
 
 ## Intended topology
 
